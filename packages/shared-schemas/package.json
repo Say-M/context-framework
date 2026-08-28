@@ -1,0 +1,21 @@
+{
+  "name": "@bismo/shared-schemas",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "types": "./src/index.ts",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "check-types": "tsc --noEmit"
+  },
+  "dependencies": {
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@bismo/config-typescript": "workspace:*",
+    "typescript": "^5.7.3"
+  }
+}

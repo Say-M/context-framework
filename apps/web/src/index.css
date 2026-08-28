@@ -1,0 +1,13 @@
+@import "tailwindcss";
+/* Tailwind's automatic content scanner skips node_modules, and @bismo/ui is
+   resolved from there as a linked workspace package — without this, none of
+   its components' utility classes (fixed/inset/z-index/etc.) get generated,
+   even though the class names render fine in the DOM. */
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+@plugin "@tailwindcss/typography";
+@import "@bismo/ui/theme.css";
+
+body {
+  background-color: var(--bismo-bg);
+  color: var(--bismo-text);
+}

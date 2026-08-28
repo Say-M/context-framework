@@ -1,0 +1,33 @@
+/*
+ * Central color tokens for BISMO. Kept as plain CSS variables (rather than
+ * hard-coded Tailwind color utilities scattered through components) so a
+ * future theme change or per-module accent tweak happens in one place.
+ * Dark is the only theme today (see product screenshots) but the
+ * light-mode block is left in place as the seam for later.
+ */
+:root {
+  --bismo-bg: #0a0a0b;
+  --bismo-bg-elevated: #121214;
+  --bismo-bg-hover: #1a1a1d;
+  --bismo-border: #27272a;
+  --bismo-text: #f4f4f5;
+  --bismo-text-muted: #a1a1aa;
+
+  --bismo-accent-domain: #3b82f6; /* Business Domain — blue */
+  --bismo-accent-model: #22c55e; /* Business Model — green */
+  --bismo-accent-org: #f59e0b; /* Org Context — amber */
+  --bismo-accent-blueprint: #a855f7; /* App Blueprint — purple */
+
+  --bismo-status-pending: #f59e0b;
+  --bismo-status-approved: #22c55e;
+  --bismo-status-rejected: #ef4444;
+}
+
+:root[data-theme="light"] {
+  --bismo-bg: #ffffff;
+  --bismo-bg-elevated: #f4f4f5;
+  --bismo-bg-hover: #e4e4e7;
+  --bismo-border: #d4d4d8;
+  --bismo-text: #18181b;
+  --bismo-text-muted: #52525b;
+}
