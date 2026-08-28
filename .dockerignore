@@ -1,0 +1,13 @@
+**/node_modules
+**/dist
+**/build
+**/.turbo
+**/coverage
+.git
+.gitignore
+.env
+.env.*
+!.env.example
+*.tmp
+.claude
+out

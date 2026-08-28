@@ -1,0 +1,61 @@
+# Production-mode stack: bundled Bun API + static web build served by nginx,
+# fronted on a single public port. Env vars come from ./.env (copy
+# .env.example to .env and fill in real values first).
+#
+#   docker compose up --build -d
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    volumes:
+      - mongo_data:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: production
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=production
+      - PORT=${PORT:-5500}
+      - WEB_ORIGIN=${WEB_ORIGIN}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/bismo}
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
+      - JWT_INVITE_SECRET=${JWT_INVITE_SECRET}
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY}
+      - EMAIL_HASH_SECRET=${EMAIL_HASH_SECRET}
+    expose:
+      - "${PORT:-5500}"
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: production
+      args:
+        # Empty on purpose: nginx serves the built app and proxies /api on
+        # the same origin, so the browser calls relative paths.
+        - VITE_API_URL=${VITE_API_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      - API_HOST=api
+      - API_PORT=${PORT:-5500}
+      - WEB_INTERNAL_PORT=80
+    ports:
+      - "${WEB_PORT:-8080}:80"
+
+volumes:
+  mongo_data:

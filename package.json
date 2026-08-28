@@ -10,7 +10,11 @@
     "dev": "turbo run dev",
     "lint": "turbo run lint",
     "check-types": "turbo run check-types",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "docker:dev": "docker compose -f docker-compose.dev.yml up --build",
+    "docker:dev:down": "docker compose -f docker-compose.dev.yml down",
+    "docker:prod": "docker compose up --build -d",
+    "docker:prod:down": "docker compose down"
   },
   "devDependencies": {
     "turbo": "^2.3.3",

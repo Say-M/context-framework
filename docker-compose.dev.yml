@@ -1,0 +1,78 @@
+# Development-mode stack: hot-reloading Bun API + Vite dev server, source
+# bind-mounted from the host. Runs out of the box with the dev-only fallback
+# secrets below — override anything via ./.env for a closer-to-prod setup.
+#
+#   docker compose -f docker-compose.dev.yml up --build
+
+services:
+  mongo:
+    image: mongo:7
+    restart: unless-stopped
+    ports:
+      - "${MONGO_PORT:-27017}:27017"
+    volumes:
+      - mongo_data_dev:/data/db
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+      target: dev
+    restart: unless-stopped
+    depends_on:
+      mongo:
+        condition: service_healthy
+    environment:
+      - NODE_ENV=development
+      - PORT=${PORT:-5500}
+      - WEB_ORIGIN=${WEB_ORIGIN:-http://localhost:5173}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/bismo}
+      # Dev-only fallbacks so this runs with zero setup — never used in
+      # docker-compose.yml (production), which requires real values.
+      - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET:-dev-only-insecure-access-secret-change-before-deploying}
+      - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET:-dev-only-insecure-refresh-secret-change-before-deploying}
+      - JWT_INVITE_SECRET=${JWT_INVITE_SECRET:-dev-only-insecure-invite-secret-change-before-deploying}
+      - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY:-UitMv6Fvv8GL4amKxKr0tm5deMwQpdMtjzVg7XlagaM=}
+      - EMAIL_HASH_SECRET=${EMAIL_HASH_SECRET:-7+eNi+H1wvuKsXcyibWSO11RhTR+DaDt1ZxhIg5e0/c=}
+    ports:
+      - "${PORT:-5500}:${PORT:-5500}"
+    volumes:
+      - ./apps/api:/app/apps/api
+      - /app/apps/api/node_modules
+      - ./packages/db-models:/app/packages/db-models
+      - /app/packages/db-models/node_modules
+      - ./packages/shared-schemas:/app/packages/shared-schemas
+      - /app/packages/shared-schemas/node_modules
+
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+      target: dev
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # The browser runs on the host, not in the docker network, so it needs
+      # the API's host-published port/address, not the internal service name.
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:${PORT:-5500}}
+      # See vite.config.ts — Docker Desktop bind mounts need polling to see
+      # host-side file changes.
+      - VITE_WATCH_POLLING=1
+    ports:
+      - "5173:5173"
+    volumes:
+      - ./apps/web:/app/apps/web
+      - /app/apps/web/node_modules
+      - ./packages/shared-schemas:/app/packages/shared-schemas
+      - /app/packages/shared-schemas/node_modules
+      - ./packages/ui:/app/packages/ui
+      - /app/packages/ui/node_modules
+
+volumes:
+  mongo_data_dev:
