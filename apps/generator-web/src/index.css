@@ -1,0 +1,10 @@
+@import "tailwindcss";
+/* See apps/web/src/index.css — same reason this is needed for @bismo/ui's
+   utility classes to be generated. */
+@source "../../../packages/ui/src/**/*.{ts,tsx}";
+@import "@bismo/ui/theme.css";
+
+body {
+  background-color: var(--bismo-bg);
+  color: var(--bismo-text);
+}

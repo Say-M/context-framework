@@ -4,6 +4,10 @@ import type { Role } from "@bismo/shared-schemas";
 
 const ISSUER = "bismo-api";
 const AUDIENCE = "bismo-web";
+// Distinct audience for the public generator app's self-service accounts —
+// this alone is what stops a platform token being accepted by internal
+// routes (and vice versa), since both token families share the same secrets.
+const PLATFORM_AUDIENCE = "bismo-generator";
 
 const ACCESS_TOKEN_TTL_SECONDS = 15 * 60;
 const REFRESH_TOKEN_TTL_SECONDS = 14 * 24 * 60 * 60;
@@ -132,3 +136,75 @@ export async function verifyInviteToken(token: string) {
 
 export const REFRESH_COOKIE_NAME = "refresh_token";
 export const REFRESH_COOKIE_MAX_AGE_SECONDS = REFRESH_TOKEN_TTL_SECONDS;
+
+export interface PlatformAccessTokenPayload {
+  sub: string;
+  tokenVersion: number;
+  iss: string;
+  aud: string;
+  exp: number;
+  iat: number;
+  [key: string]: unknown;
+}
+
+export interface PlatformRefreshTokenPayload {
+  sub: string;
+  tokenVersion: number;
+  iss: string;
+  aud: string;
+  exp: number;
+  iat: number;
+  [key: string]: unknown;
+}
+
+export async function signPlatformAccessToken(user: { id: string; refreshTokenVersion: number }) {
+  const iat = nowSeconds();
+  const payload: PlatformAccessTokenPayload = {
+    sub: user.id,
+    tokenVersion: user.refreshTokenVersion,
+    iss: ISSUER,
+    aud: PLATFORM_AUDIENCE,
+    iat,
+    exp: iat + ACCESS_TOKEN_TTL_SECONDS,
+  };
+  return sign(payload, env.JWT_ACCESS_SECRET, ALG);
+}
+
+export async function verifyPlatformAccessToken(token: string) {
+  const payload = (await verify(
+    token,
+    env.JWT_ACCESS_SECRET,
+    ALG,
+  )) as unknown as PlatformAccessTokenPayload;
+  if (payload.iss !== ISSUER || payload.aud !== PLATFORM_AUDIENCE) {
+    throw new Error("Invalid token issuer/audience");
+  }
+  return payload;
+}
+
+export async function signPlatformRefreshToken(user: { id: string; refreshTokenVersion: number }) {
+  const iat = nowSeconds();
+  const payload: PlatformRefreshTokenPayload = {
+    sub: user.id,
+    tokenVersion: user.refreshTokenVersion,
+    iss: ISSUER,
+    aud: PLATFORM_AUDIENCE,
+    iat,
+    exp: iat + REFRESH_TOKEN_TTL_SECONDS,
+  };
+  return sign(payload, env.JWT_REFRESH_SECRET, ALG);
+}
+
+export async function verifyPlatformRefreshToken(token: string) {
+  const payload = (await verify(
+    token,
+    env.JWT_REFRESH_SECRET,
+    ALG,
+  )) as unknown as PlatformRefreshTokenPayload;
+  if (payload.iss !== ISSUER || payload.aud !== PLATFORM_AUDIENCE) {
+    throw new Error("Invalid token issuer/audience");
+  }
+  return payload;
+}
+
+export const PLATFORM_REFRESH_COOKIE_NAME = "platform_refresh_token";

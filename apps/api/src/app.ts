@@ -16,6 +16,9 @@ import { appBlueprintRoutes } from "./modules/app-blueprint/routes";
 import { specificationRoutes } from "./modules/specifications/routes";
 import { approvalRoutes } from "./modules/approvals/routes";
 import { userRoutes } from "./modules/users/routes";
+import { platformAuthRoutes } from "./modules/platform-auth/routes";
+import { catalogRoutes } from "./modules/catalog/routes";
+import { generatedAppRoutes } from "./modules/generated-apps/routes";
 
 export const app = new Hono<{ Variables: AppVariables }>();
 
@@ -32,7 +35,7 @@ app.use("*", async (c, next) => {
 app.use(
   "*",
   cors({
-    origin: env.WEB_ORIGIN,
+    origin: [env.WEB_ORIGIN, env.GENERATOR_WEB_ORIGIN],
     credentials: true,
     allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
     allowHeaders: ["Content-Type", "Authorization"],
@@ -52,6 +55,9 @@ app.route("/api/v1/app-blueprints", appBlueprintRoutes);
 app.route("/api/v1/specifications", specificationRoutes);
 app.route("/api/v1/approvals", approvalRoutes);
 app.route("/api/v1/users", userRoutes);
+app.route("/api/v1/platform-auth", platformAuthRoutes);
+app.route("/api/v1/catalog", catalogRoutes);
+app.route("/api/v1/generated-apps", generatedAppRoutes);
 
 app.get(
   "/api/v1/openapi.json",

@@ -9,3 +9,4 @@ build
 coverage
 *.tmp
 .claude/settings.local.json
+apps/api/data/

@@ -36,6 +36,16 @@ export {
   type ContentVersionDocument,
   type ContentVersionAttrs,
 } from "./ContentVersion.model";
+export {
+  PlatformUserModel,
+  type PlatformUserDocument,
+  type PlatformUserAttrs,
+} from "./PlatformUser.model";
+export {
+  GeneratedAppModel,
+  type GeneratedAppDocument,
+  type GeneratedAppAttrs,
+} from "./GeneratedApp.model";
 export { approvablePlugin, type ApprovableFields } from "./plugins/approvable.plugin";
 export { fieldEncryptionPlugin } from "./plugins/fieldEncryption.plugin";
 export {

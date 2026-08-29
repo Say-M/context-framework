@@ -8,3 +8,6 @@ export * from "./specification.schema";
 export * from "./app-blueprint.schema";
 export * from "./user.schema";
 export * from "./version.schema";
+export * from "./platform-auth.schema";
+export * from "./catalog.schema";
+export * from "./generated-app.schema";

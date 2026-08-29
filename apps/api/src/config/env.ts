@@ -32,6 +32,8 @@ const envSchema = z.object({
     .default("development"),
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().url(),
+  GENERATOR_WEB_ORIGIN: z.string().url(),
+  GENERATED_APPS_DIR: z.string().min(1).default("./data/generated-apps"),
   MONGODB_URI: z.string().min(1),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),

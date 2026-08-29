@@ -31,6 +31,8 @@ services:
       - NODE_ENV=development
       - PORT=${PORT:-5500}
       - WEB_ORIGIN=${WEB_ORIGIN:-http://localhost:5173}
+      - GENERATOR_WEB_ORIGIN=${GENERATOR_WEB_ORIGIN:-http://localhost:5174}
+      - GENERATED_APPS_DIR=/app/data/generated-apps
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/bismo}
       # Dev-only fallbacks so this runs with zero setup — never used in
       # docker-compose.yml (production), which requires real values.
@@ -48,6 +50,7 @@ services:
       - /app/packages/db-models/node_modules
       - ./packages/shared-schemas:/app/packages/shared-schemas
       - /app/packages/shared-schemas/node_modules
+      - generated_apps_data_dev:/app/data/generated-apps
 
   web:
     build:
@@ -74,5 +77,31 @@ services:
       - ./packages/ui:/app/packages/ui
       - /app/packages/ui/node_modules
 
+  generator-web:
+    build:
+      context: .
+      dockerfile: apps/generator-web/Dockerfile
+      target: dev
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # The browser runs on the host, not in the docker network, so it needs
+      # the API's host-published port/address, not the internal service name.
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:${PORT:-5500}}
+      # See vite.config.ts — Docker Desktop bind mounts need polling to see
+      # host-side file changes.
+      - VITE_WATCH_POLLING=1
+    ports:
+      - "5174:5174"
+    volumes:
+      - ./apps/generator-web:/app/apps/generator-web
+      - /app/apps/generator-web/node_modules
+      - ./packages/shared-schemas:/app/packages/shared-schemas
+      - /app/packages/shared-schemas/node_modules
+      - ./packages/ui:/app/packages/ui
+      - /app/packages/ui/node_modules
+
 volumes:
   mongo_data_dev:
+  generated_apps_data_dev:
