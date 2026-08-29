@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { ApprovalStatus } from "@bismo/shared-schemas";
-import { ApprovalStatusBadge, Button, Card, CardDescription, CardHeader, CardTitle, Input } from "@bismo/ui";
+import { ApprovalStatusBadge, Button, Card, CardDescription, CardHeader, CardTitle, cn, Input } from "@bismo/ui";
 import { useBusinessModels } from "../queries";
 import { CreateBusinessModelDialog } from "./CreateBusinessModelDialog";
 
@@ -28,7 +28,12 @@ export function BusinessModelListPanel({
   });
 
   return (
-    <div className="flex w-[420px] flex-shrink-0 flex-col gap-4 border-r border-[var(--bismo-border)] p-4">
+    <div
+      className={cn(
+        "flex w-full flex-shrink-0 flex-col gap-4 border-r border-[var(--bismo-border)] p-4 lg:w-[420px]",
+        selectedId && "hidden lg:flex",
+      )}
+    >
       <div className="flex items-center justify-between gap-2">
         <h1 className="text-lg font-bold text-[var(--bismo-text)]">02. Business Models</h1>
         <Button size="sm" onClick={() => setCreateOpen(true)} className="bg-[var(--bismo-accent-model)]">

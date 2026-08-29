@@ -33,7 +33,7 @@ export function SpecViewer({ content, rawSource, frontmatter, className }: SpecV
 
   return (
     <div className={cn("flex flex-col gap-3", className)}>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap gap-3 items-center justify-between">
         <div className="text-sm font-semibold text-[var(--bismo-text)]">Concept Specification Document</div>
         <div className="flex gap-2">
           <Button variant="secondary" size="sm" onClick={() => void copyMd()}>

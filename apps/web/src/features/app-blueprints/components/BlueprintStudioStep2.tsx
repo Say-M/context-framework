@@ -89,7 +89,7 @@ export function BlueprintStudioStep2({ blueprint }: { blueprint: AppBlueprint })
     ) + (tree.root ? 1 : 0);
 
   return (
-    <div className="grid grid-cols-[300px_1fr] gap-6">
+    <div className="grid grid-cols-1 gap-6 lg:grid-cols-[300px_1fr]">
       <div>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bismo-text-muted)]">
@@ -126,14 +126,14 @@ export function BlueprintStudioStep2({ blueprint }: { blueprint: AppBlueprint })
           </p>
         ) : (
           <>
-            <div className="mb-3 flex items-start justify-between">
+            <div className="mb-3 flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
               <div>
                 <p className="text-xs text-[var(--bismo-text-muted)]">
                   {selectedSpec.path} · v{selectedSpec.version}
                 </p>
                 <p className="text-lg font-semibold text-[var(--bismo-text)]">{selectedSpec.title}</p>
               </div>
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 <Button size="sm" variant="secondary" onClick={() => setHistoryOpen(true)}>
                   History
                 </Button>

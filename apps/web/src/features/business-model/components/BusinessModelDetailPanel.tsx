@@ -6,7 +6,13 @@ import { SpecificationPanel } from "@/features/specifications/components/Specifi
 import { useBusinessModel, useDeleteBusinessModel, useResubmitBusinessModel } from "../queries";
 import { CreateBusinessModelDialog } from "./CreateBusinessModelDialog";
 
-export function BusinessModelDetailPanel({ modelId }: { modelId: string | null }) {
+export function BusinessModelDetailPanel({
+  modelId,
+  onBack,
+}: {
+  modelId: string | null;
+  onBack: () => void;
+}) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: model, isLoading } = useBusinessModel(modelId);
@@ -17,7 +23,7 @@ export function BusinessModelDetailPanel({ modelId }: { modelId: string | null }
 
   if (!modelId) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-[var(--bismo-text-muted)]">
+      <div className="hidden flex-1 items-center justify-center text-sm text-[var(--bismo-text-muted)] lg:flex">
         Select a business model to view its details.
       </div>
     );
@@ -34,8 +40,15 @@ export function BusinessModelDetailPanel({ modelId }: { modelId: string | null }
   const canResubmit = model.status === "rejected" && (isOwner || isAdmin);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
-      <div className="flex items-start justify-between">
+    <div className="flex w-full flex-1 flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-1 text-sm text-[var(--bismo-text-muted)] hover:underline lg:hidden"
+      >
+        ← Back to Business Models
+      </button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <span className="rounded bg-[var(--bismo-bg-hover)] px-2 py-0.5 font-mono text-xs text-[var(--bismo-text-muted)]">
@@ -45,7 +58,7 @@ export function BusinessModelDetailPanel({ modelId }: { modelId: string | null }
           </div>
           <h2 className="mt-1 text-2xl font-bold text-[var(--bismo-text)]">{model.name}</h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ApprovalStatusBadge status={model.status} />
           {canEdit && (
             <Button size="sm" variant="secondary" onClick={() => setEditOpen(true)}>
@@ -79,7 +92,7 @@ export function BusinessModelDetailPanel({ modelId }: { modelId: string | null }
 
       <p className="text-sm text-[var(--bismo-text-muted)]">{model.description}</p>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
         <section>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bismo-accent-model)]">
             Monetization & Margins

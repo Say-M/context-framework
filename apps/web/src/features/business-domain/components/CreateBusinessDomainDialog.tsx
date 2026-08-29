@@ -93,7 +93,7 @@ export function CreateBusinessDomainDialog({
       description="Author an operational business domain module with custom capabilities and entities."
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="Domain Code" htmlFor="code" error={errors.code?.message} required>
             <Input id="code" placeholder="DOM-CUSTOM" disabled={isEditing} {...register("code")} />
           </FormField>

@@ -19,7 +19,7 @@ export function Dialog({ open, onOpenChange, title, description, children, class
         <BaseDialog.Backdrop className="fixed inset-0 z-40 bg-black/60 data-[state=open]:animate-in data-[state=open]:fade-in" />
         <BaseDialog.Popup
           className={cn(
-            "fixed left-1/2 top-1/2 z-50 w-full max-w-lg -translate-x-1/2 -translate-y-1/2 rounded-lg border border-[var(--bismo-border)] bg-[var(--bismo-bg-elevated)] p-6 shadow-xl outline-none",
+            "fixed left-1/2 top-1/2 z-50 max-h-[85vh] w-[calc(100%-2rem)] max-w-lg -translate-x-1/2 -translate-y-1/2 overflow-y-auto rounded-lg border border-[var(--bismo-border)] bg-[var(--bismo-bg-elevated)] p-4 shadow-xl outline-none sm:p-6",
             className,
           )}
         >

@@ -13,11 +13,11 @@ function ApiDocsPage() {
         Interactive OpenAPI reference for every BISMO endpoint, generated directly from the API's
         request/response schemas.
       </p>
-      <div className="mt-6 flex flex-col items-start gap-4 rounded-lg border border-[var(--bismo-border)] p-8">
+      <div className="mt-6 flex flex-col items-start gap-4 rounded-lg border border-[var(--bismo-border)] p-4 sm:p-8">
         <p className="text-sm text-[var(--bismo-text-muted)]">
           The reference is served by the API itself (via Scalar) and opens in a new tab.
         </p>
-        <div className="flex gap-3">
+        <div className="flex w-full flex-col gap-3 sm:w-auto sm:flex-row">
           <a
             href={DOCS_URL}
             target="_blank"

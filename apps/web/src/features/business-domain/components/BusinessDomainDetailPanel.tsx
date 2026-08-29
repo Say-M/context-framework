@@ -3,10 +3,20 @@ import { useNavigate } from "@tanstack/react-router";
 import { ApprovalStatusBadge, Button, ConfirmDialog } from "@bismo/ui";
 import { useAuth } from "@/context/AuthContext";
 import { SpecificationPanel } from "@/features/specifications/components/SpecificationPanel";
-import { useBusinessDomain, useDeleteBusinessDomain, useResubmitBusinessDomain } from "../queries";
+import {
+  useBusinessDomain,
+  useDeleteBusinessDomain,
+  useResubmitBusinessDomain,
+} from "../queries";
 import { CreateBusinessDomainDialog } from "./CreateBusinessDomainDialog";
 
-export function BusinessDomainDetailPanel({ domainId }: { domainId: string | null }) {
+export function BusinessDomainDetailPanel({
+  domainId,
+  onBack,
+}: {
+  domainId: string | null;
+  onBack: () => void;
+}) {
   const { user } = useAuth();
   const navigate = useNavigate();
   const { data: domain, isLoading } = useBusinessDomain(domainId);
@@ -17,43 +27,67 @@ export function BusinessDomainDetailPanel({ domainId }: { domainId: string | nul
 
   if (!domainId) {
     return (
-      <div className="flex flex-1 items-center justify-center text-sm text-[var(--bismo-text-muted)]">
+      <div className="hidden flex-1 items-center justify-center text-sm text-[var(--bismo-text-muted)] lg:flex">
         Select a business domain to view its details.
       </div>
     );
   }
 
   if (isLoading || !domain) {
-    return <div className="flex-1 p-6 text-sm text-[var(--bismo-text-muted)]">Loading…</div>;
+    return (
+      <div className="flex-1 p-6 text-sm text-[var(--bismo-text-muted)]">
+        Loading…
+      </div>
+    );
   }
 
   const isOwner = user?.id === domain.createdBy;
   const isAdmin = user?.role === "admin";
-  const isEditableStatus = domain.status === "pending" || domain.status === "rejected";
+  const isEditableStatus =
+    domain.status === "pending" || domain.status === "rejected";
   const canEdit = isAdmin || (isOwner && isEditableStatus);
   const canResubmit = domain.status === "rejected" && (isOwner || isAdmin);
 
   return (
-    <div className="flex flex-1 flex-col gap-6 overflow-y-auto p-6">
-      <div className="flex items-start justify-between">
+    <div className="flex w-full flex-1 flex-col gap-6 overflow-y-auto p-4 sm:p-6">
+      <button
+        type="button"
+        onClick={onBack}
+        className="flex items-center gap-1 text-sm text-[var(--bismo-text-muted)] hover:underline lg:hidden"
+      >
+        ← Back to Business Domains
+      </button>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex items-center gap-2">
             <span className="rounded bg-[var(--bismo-bg-hover)] px-2 py-0.5 font-mono text-xs text-[var(--bismo-text-muted)]">
               {domain.code}
             </span>
-            <span className="text-xs text-[var(--bismo-text-muted)]">{domain.category}</span>
+            <span className="text-xs text-[var(--bismo-text-muted)]">
+              {domain.category}
+            </span>
           </div>
-          <h2 className="mt-1 text-2xl font-bold text-[var(--bismo-text)]">{domain.name}</h2>
+          <h2 className="mt-1 text-2xl font-bold text-[var(--bismo-text)]">
+            {domain.name}
+          </h2>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <ApprovalStatusBadge status={domain.status} />
           {canEdit && (
-            <Button size="sm" variant="secondary" onClick={() => setEditOpen(true)}>
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={() => setEditOpen(true)}
+            >
               Edit
             </Button>
           )}
           {canEdit && (
-            <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)}>
+            <Button
+              size="sm"
+              variant="destructive"
+              onClick={() => setDeleteOpen(true)}
+            >
               Delete
             </Button>
           )}
@@ -62,7 +96,9 @@ export function BusinessDomainDetailPanel({ domainId }: { domainId: string | nul
 
       {domain.status === "rejected" && domain.reviewNote && (
         <div className="rounded-md border border-[var(--bismo-status-rejected)]/40 bg-[var(--bismo-status-rejected)]/10 p-3 text-sm text-[var(--bismo-text)]">
-          <p className="font-medium text-[var(--bismo-status-rejected)]">Rejected: {domain.reviewNote}</p>
+          <p className="font-medium text-[var(--bismo-status-rejected)]">
+            Rejected: {domain.reviewNote}
+          </p>
           {canResubmit && (
             <Button
               size="sm"
@@ -77,16 +113,20 @@ export function BusinessDomainDetailPanel({ domainId }: { domainId: string | nul
         </div>
       )}
 
-      <p className="text-sm text-[var(--bismo-text-muted)]">{domain.description}</p>
+      <p className="text-sm text-[var(--bismo-text-muted)]">
+        {domain.description}
+      </p>
 
-      <div className="grid grid-cols-2 gap-4">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-1 xl:grid-cols-2">
         <section>
           <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bismo-accent-domain)]">
             Core Domain Capabilities
           </h3>
           <ul className="list-inside list-disc space-y-1 text-sm text-[var(--bismo-text)]">
             {domain.capabilities.length === 0 && (
-              <li className="text-[var(--bismo-text-muted)] list-none">None listed.</li>
+              <li className="text-[var(--bismo-text-muted)] list-none">
+                None listed.
+              </li>
             )}
             {domain.capabilities.map((cap) => (
               <li key={cap}>{cap}</li>
@@ -120,7 +160,11 @@ export function BusinessDomainDetailPanel({ domainId }: { domainId: string | nul
         accentColor="var(--bismo-accent-domain)"
       />
 
-      <CreateBusinessDomainDialog open={editOpen} onOpenChange={setEditOpen} existing={domain} />
+      <CreateBusinessDomainDialog
+        open={editOpen}
+        onOpenChange={setEditOpen}
+        existing={domain}
+      />
 
       <ConfirmDialog
         open={deleteOpen}
@@ -133,7 +177,10 @@ export function BusinessDomainDetailPanel({ domainId }: { domainId: string | nul
           deleteDomain.mutate(domain.id, {
             onSuccess: () => {
               setDeleteOpen(false);
-              navigate({ to: "/business-domains", search: { selected: undefined } });
+              navigate({
+                to: "/business-domains",
+                search: { selected: undefined },
+              });
             },
           })
         }

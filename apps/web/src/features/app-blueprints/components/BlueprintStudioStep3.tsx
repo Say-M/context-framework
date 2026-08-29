@@ -53,7 +53,7 @@ export function BlueprintStudioStep3({ blueprint }: { blueprint: AppBlueprint })
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <span className="rounded bg-[var(--bismo-bg-hover)] px-2 py-0.5 font-mono text-xs text-[var(--bismo-text-muted)]">
             {blueprint.namespace} · {blueprint.version}
@@ -73,7 +73,7 @@ export function BlueprintStudioStep3({ blueprint }: { blueprint: AppBlueprint })
         </div>
       )}
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <SummaryCard title="Connected Domains" accent="var(--bismo-accent-domain)">
           {connectedDomains.map((d) => (
             <p key={d.id}>
@@ -101,13 +101,13 @@ export function BlueprintStudioStep3({ blueprint }: { blueprint: AppBlueprint })
         <h3 className="mb-2 text-xs font-semibold uppercase tracking-wide text-[var(--bismo-text-muted)]">
           Application Blueprint Specifications ({specs.length} files)
         </h3>
-        <div className="grid grid-cols-2 gap-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           {specs.map((spec) => (
             <div
               key={spec.id}
-              className="flex items-center justify-between rounded-md border border-[var(--bismo-border)] px-3 py-2 text-sm"
+              className="flex items-center justify-between gap-2 rounded-md border border-[var(--bismo-border)] px-3 py-2 text-sm"
             >
-              <span className="font-mono text-xs text-[var(--bismo-text)]">{spec.path}</span>
+              <span className="min-w-0 truncate font-mono text-xs text-[var(--bismo-text)]">{spec.path}</span>
               <StatusBadge variant="neutral">{spec.frontmatterType}</StatusBadge>
             </div>
           ))}

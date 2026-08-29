@@ -34,12 +34,12 @@ export function ApprovalQueueList() {
       {items.map((item) => (
         <div
           key={`${item.type}-${item.id}`}
-          className="flex items-center justify-between rounded-lg border border-[var(--bismo-border)] bg-[var(--bismo-bg-elevated)] p-4"
+          className="flex flex-col gap-3 rounded-lg border border-[var(--bismo-border)] bg-[var(--bismo-bg-elevated)] p-4 sm:flex-row sm:items-center sm:justify-between"
         >
           <div className="flex items-center gap-3">
             <StatusBadge variant="neutral">{TYPE_LABELS[item.type]}</StatusBadge>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs text-[var(--bismo-text-muted)]">{item.code}</span>
                 <span className="font-semibold text-[var(--bismo-text)]">{item.name}</span>
               </div>

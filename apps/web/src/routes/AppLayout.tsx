@@ -1,3 +1,4 @@
+import { useState } from "react";
 import { createRoute, Navigate, Outlet } from "@tanstack/react-router";
 import { rootRoute } from "./__root";
 import { useAuth } from "@/context/AuthContext";
@@ -5,16 +6,36 @@ import { Sidebar } from "@/components/Sidebar";
 
 function AppLayoutComponent() {
   const { status } = useAuth();
+  const [sidebarOpen, setSidebarOpen] = useState(false);
 
   if (status === "loading") return null;
   if (status === "unauthenticated") return <Navigate to="/login" />;
 
   return (
     <div className="flex min-h-screen bg-[var(--bismo-bg)]">
-      <Sidebar />
-      <main className="flex-1 overflow-y-auto p-8">
-        <Outlet />
-      </main>
+      <Sidebar open={sidebarOpen} onClose={() => setSidebarOpen(false)} />
+      <div className="flex min-w-0 flex-1 flex-col">
+        <header className="flex h-14 flex-shrink-0 items-center gap-3 border-b border-[var(--bismo-border)] px-4 md:hidden">
+          <button
+            onClick={() => setSidebarOpen(true)}
+            aria-label="Open menu"
+            className="flex h-9 w-9 items-center justify-center rounded-md border border-[var(--bismo-border)] text-[var(--bismo-text)]"
+          >
+            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
+              <path
+                d="M2 4.5h14M2 9h14M2 13.5h14"
+                stroke="currentColor"
+                strokeWidth="1.5"
+                strokeLinecap="round"
+              />
+            </svg>
+          </button>
+          <span className="text-sm font-bold text-[var(--bismo-text)]">BISMO</span>
+        </header>
+        <main className="min-w-0 flex-1 overflow-y-auto p-4 md:p-8">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

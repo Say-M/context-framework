@@ -92,7 +92,7 @@ export function CreateBusinessModelDialog({
       description="Author an operating archetype with revenue mechanics, unit economics, and channels."
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="Model Code" htmlFor="model-code" error={errors.code?.message} required>
             <Input id="model-code" placeholder="MOD-CUSTOM" disabled={isEditing} {...register("code")} />
           </FormField>

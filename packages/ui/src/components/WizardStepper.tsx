@@ -13,7 +13,7 @@ export interface WizardStepperProps {
 
 export function WizardStepper({ steps, activeIndex, className }: WizardStepperProps) {
   return (
-    <div className={cn("flex items-center gap-2", className)}>
+    <div className={cn("flex flex-wrap items-center gap-2", className)}>
       {steps.map((step, index) => {
         const isComplete = index < activeIndex;
         const isActive = index === activeIndex;

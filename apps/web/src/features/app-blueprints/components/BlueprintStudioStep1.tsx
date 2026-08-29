@@ -100,7 +100,7 @@ export function BlueprintStudioStep1({
         <p className="text-lg font-bold text-[var(--bismo-text)]">Internal Connection Selection Process</p>
       </div>
 
-      <div className="grid grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         <MultiSelectPicker
           title="01. Business Domains"
           mode="multiple"
@@ -129,7 +129,7 @@ export function BlueprintStudioStep1({
 
       <form onSubmit={handleSubmit(onSubmit)} className="flex flex-col gap-4 rounded-lg border border-[var(--bismo-border)] p-4">
         <h3 className="text-sm font-semibold text-[var(--bismo-text)]">Application Blueprint Metadata</h3>
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField
             label="Namespace (Unique Package URI)"
             htmlFor="bp-namespace"

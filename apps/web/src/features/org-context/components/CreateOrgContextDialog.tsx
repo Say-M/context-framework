@@ -100,7 +100,7 @@ export function CreateOrgContextDialog({
       description="Define corporate structure, legal entities, approval matrices, and compliance standards."
     >
       <form onSubmit={handleSubmit(onSubmit)} className="flex max-h-[70vh] flex-col gap-4 overflow-y-auto pr-1">
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
           <FormField label="Context Code" htmlFor="org-code" error={errors.code?.message} required>
             <Input id="org-code" placeholder="ORG-CUSTOM" disabled={isEditing} {...register("code")} />
           </FormField>

@@ -8,7 +8,7 @@ export function AppBlueprintListPage() {
 
   return (
     <div>
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--bismo-text)]">04. App Blueprints</h1>
           <p className="mt-1 text-[var(--bismo-text-muted)]">
@@ -16,11 +16,13 @@ export function AppBlueprintListPage() {
           </p>
         </div>
         <Link to="/app-blueprints/new">
-          <Button className="bg-[var(--bismo-accent-blueprint)]">+ New Application Blueprint</Button>
+          <Button className="w-full bg-[var(--bismo-accent-blueprint)] sm:w-auto">
+            + New Application Blueprint
+          </Button>
         </Link>
       </div>
 
-      <div className="mt-6 grid grid-cols-3 gap-4">
+      <div className="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {isLoading && <p className="text-sm text-[var(--bismo-text-muted)]">Loading…</p>}
         {!isLoading && data?.items.length === 0 && (
           <p className="text-sm text-[var(--bismo-text-muted)]">

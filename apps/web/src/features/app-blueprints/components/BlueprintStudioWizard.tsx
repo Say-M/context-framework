@@ -43,7 +43,7 @@ function BlueprintStudioWizardInner({
 
   return (
     <div className="flex flex-col gap-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-[var(--bismo-text)]">Create Application Blueprint</h1>
           <p className="text-sm text-[var(--bismo-text-muted)]">Authoring & Interconnection Studio</p>

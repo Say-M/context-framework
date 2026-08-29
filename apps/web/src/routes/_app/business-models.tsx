@@ -13,12 +13,15 @@ function BusinessModelsPage() {
   const navigate = businessModelsRoute.useNavigate();
 
   return (
-    <div className="-m-8 flex h-screen">
+    <div className="-m-4 flex h-[calc(100dvh-3.5rem)] md:-m-8 md:h-screen">
       <BusinessModelListPanel
         selectedId={selected ?? null}
         onSelect={(id) => navigate({ search: { selected: id } })}
       />
-      <BusinessModelDetailPanel modelId={selected ?? null} />
+      <BusinessModelDetailPanel
+        modelId={selected ?? null}
+        onBack={() => navigate({ search: { selected: undefined } })}
+      />
     </div>
   );
 }

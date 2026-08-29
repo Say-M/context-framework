@@ -13,12 +13,15 @@ function OrgContextsPage() {
   const navigate = orgContextsRoute.useNavigate();
 
   return (
-    <div className="-m-8 flex h-screen">
+    <div className="-m-4 flex h-[calc(100dvh-3.5rem)] md:-m-8 md:h-screen">
       <OrgContextListPanel
         selectedId={selected ?? null}
         onSelect={(id) => navigate({ search: { selected: id } })}
       />
-      <OrgContextDetailPanel contextId={selected ?? null} />
+      <OrgContextDetailPanel
+        contextId={selected ?? null}
+        onBack={() => navigate({ search: { selected: undefined } })}
+      />
     </div>
   );
 }
