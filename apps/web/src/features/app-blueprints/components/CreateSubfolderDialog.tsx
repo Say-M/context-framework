@@ -1,9 +1,9 @@
 import { useState } from "react";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { BLUEPRINT_SECTIONS, type BlueprintSection } from "@bismo/shared-schemas";
-import { Button, Dialog, FormField, Input } from "@bismo/ui";
+import { Button, Dialog, FormField, Input, Select } from "@bismo/ui";
 import { ApiError } from "@/lib/api-client";
 import { useCreateBlueprintFolder } from "../queries";
 
@@ -51,6 +51,7 @@ export function CreateSubfolderDialog({
   const createFolder = useCreateBlueprintFolder(blueprintId);
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
@@ -88,18 +89,22 @@ export function CreateSubfolderDialog({
           </p>
         )}
         <FormField label="Target Blueprint Section" htmlFor="folder-section" error={errors.section?.message} required>
-          <select
-            id="folder-section"
-            disabled={!!fixedSection}
-            className="w-full rounded-md border border-[var(--bismo-border)] bg-[var(--bismo-bg)] px-3 py-2 text-sm text-[var(--bismo-text)] disabled:opacity-60"
-            {...register("section")}
-          >
-            {BLUEPRINT_SECTIONS.map((slug) => (
-              <option key={slug} value={slug}>
-                {SECTION_LABELS[slug]} ({slug}/)
-              </option>
-            ))}
-          </select>
+          <Controller
+            control={control}
+            name="section"
+            render={({ field }) => (
+              <Select
+                id="folder-section"
+                disabled={!!fixedSection}
+                value={field.value}
+                onValueChange={field.onChange}
+                options={BLUEPRINT_SECTIONS.map((slug) => ({
+                  value: slug,
+                  label: `${SECTION_LABELS[slug]} (${slug}/)`,
+                }))}
+              />
+            )}
+          />
         </FormField>
         <FormField label="Subfolder Name" htmlFor="folder-name" error={errors.name?.message} required>
           <Input id="folder-name" placeholder="e.g. approval_rules or line_items" {...register("name")} />

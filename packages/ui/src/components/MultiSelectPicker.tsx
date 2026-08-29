@@ -1,3 +1,4 @@
+import { Checkbox } from "./Checkbox";
 import { cn } from "../lib/cn";
 
 export interface PickerOption {
@@ -50,32 +51,29 @@ export function MultiSelectPicker({
         )}
         {options.map((option) => {
           const checked = value.includes(option.id);
+          const inputId = `msp-${title.replace(/\s+/g, "-")}-${option.id}`;
           return (
-            <button
+            <label
               key={option.id}
-              type="button"
-              onClick={() => toggle(option.id)}
+              htmlFor={inputId}
               className={cn(
-                "flex items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-[var(--bismo-bg-hover)]",
+                "flex cursor-pointer items-center gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors hover:bg-[var(--bismo-bg-hover)]",
                 checked && "bg-[var(--bismo-bg-hover)]",
               )}
             >
-              <span
-                className="flex h-4 w-4 flex-shrink-0 items-center justify-center rounded border text-[10px] text-white"
-                style={{
-                  borderColor: checked ? accentColor : "var(--bismo-border)",
-                  backgroundColor: checked ? accentColor : "transparent",
-                }}
-              >
-                {checked && "✓"}
-              </span>
+              <Checkbox
+                id={inputId}
+                checked={checked}
+                onCheckedChange={() => toggle(option.id)}
+                accentColor={accentColor}
+              />
               <span className="flex flex-col">
                 <span className="text-[var(--bismo-text)]">{option.label}</span>
                 {option.sublabel && (
                   <span className="text-xs text-[var(--bismo-text-muted)]">{option.sublabel}</span>
                 )}
               </span>
-            </button>
+            </label>
           );
         })}
       </div>

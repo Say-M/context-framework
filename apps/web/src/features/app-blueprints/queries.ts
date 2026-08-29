@@ -8,6 +8,7 @@ import type {
   ListAppBlueprintsQuery,
   OkfManifest,
   SectionTree,
+  UpdateAppBlueprintMetadataInput,
 } from "@bismo/shared-schemas";
 import { apiRequest } from "@/lib/api-client";
 import { toQueryString } from "@/lib/query-string";
@@ -67,6 +68,29 @@ export function useUpdateConnections(id: string) {
       queryClient.invalidateQueries({ queryKey: appBlueprintKeys.detail(id) });
       queryClient.invalidateQueries({ queryKey: appBlueprintKeys.manifest(id) });
     },
+  });
+}
+
+export function useUpdateAppBlueprintMetadata(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: UpdateAppBlueprintMetadataInput) =>
+      apiRequest<AppBlueprint>(`/api/v1/app-blueprints/${id}/metadata`, {
+        method: "PATCH",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: appBlueprintKeys.detail(id) });
+      queryClient.invalidateQueries({ queryKey: appBlueprintKeys.all });
+    },
+  });
+}
+
+export function useDeleteAppBlueprint() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (id: string) => apiRequest(`/api/v1/app-blueprints/${id}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: appBlueprintKeys.all }),
   });
 }
 

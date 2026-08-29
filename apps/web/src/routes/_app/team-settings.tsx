@@ -1,10 +1,10 @@
 import { createRoute } from "@tanstack/react-router";
-import { useForm } from "react-hook-form";
+import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { useState } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { inviteUserSchema, type InviteUserInput } from "@bismo/shared-schemas";
-import { Button, Card, CardDescription, CardTitle, FormField, Input } from "@bismo/ui";
+import { Button, Card, CardDescription, CardTitle, FormField, Input, Select } from "@bismo/ui";
 import { appLayoutRoute } from "../AppLayout";
 import { AdminGuard } from "@/components/AdminGuard";
 import { apiRequest, ApiError } from "@/lib/api-client";
@@ -22,6 +22,7 @@ function TeamSettingsPage() {
   const [serverError, setServerError] = useState<string | null>(null);
   const {
     register,
+    control,
     handleSubmit,
     reset,
     formState: { errors, isSubmitting },
@@ -64,14 +65,21 @@ function TeamSettingsPage() {
             <Input id="invite-email" type="email" {...register("email")} />
           </FormField>
           <FormField label="Role" htmlFor="invite-role" error={errors.role?.message} required>
-            <select
-              id="invite-role"
-              className="w-full rounded-md border border-[var(--bismo-border)] bg-[var(--bismo-bg)] px-3 py-2 text-sm"
-              {...register("role")}
-            >
-              <option value="author">Author</option>
-              <option value="admin">Admin</option>
-            </select>
+            <Controller
+              control={control}
+              name="role"
+              render={({ field }) => (
+                <Select
+                  id="invite-role"
+                  value={field.value}
+                  onValueChange={field.onChange}
+                  options={[
+                    { value: "author", label: "Author" },
+                    { value: "admin", label: "Admin" },
+                  ]}
+                />
+              )}
+            />
           </FormField>
           {serverError && <p className="text-sm text-[var(--bismo-status-rejected)]">{serverError}</p>}
           <Button type="submit" disabled={isSubmitting}>

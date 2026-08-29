@@ -1,7 +1,12 @@
-import { WizardStepper } from "@bismo/ui";
+import { useState } from "react";
+import { useNavigate } from "@tanstack/react-router";
+import { Button, ConfirmDialog, WizardStepper } from "@bismo/ui";
 import type { AppBlueprint } from "@bismo/shared-schemas";
-import { useAppBlueprint } from "../queries";
+import { useAuth } from "@/context/AuthContext";
+import { ApiError } from "@/lib/api-client";
+import { useAppBlueprint, useDeleteAppBlueprint } from "../queries";
 import { BlueprintStudioProvider, useBlueprintStudio } from "../context/BlueprintStudioContext";
+import { AppBlueprintStatusBadge } from "./AppBlueprintStatusBadge";
 import { BlueprintStudioStep1 } from "./BlueprintStudioStep1";
 import { BlueprintStudioStep2 } from "./BlueprintStudioStep2";
 import { BlueprintStudioStep3 } from "./BlueprintStudioStep3";
@@ -33,8 +38,18 @@ function BlueprintStudioWizardInner({
   draftId: string | null;
   onDraftCreated: (id: string) => void;
 }) {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const { step, setStep } = useBlueprintStudio();
   const { data: blueprint, isLoading } = useAppBlueprint(draftId);
+  const deleteBlueprint = useDeleteAppBlueprint();
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  const isAdmin = user?.role === "admin";
+  const isOwner = !!blueprint && user?.id === blueprint.createdBy;
+  const isEditableStatus = !!blueprint && (blueprint.status === "draft" || blueprint.status === "rejected");
+  const canEdit = !blueprint || isAdmin || (isOwner && isEditableStatus);
 
   const handleCreated = (created: AppBlueprint) => {
     onDraftCreated(created.id);
@@ -48,7 +63,19 @@ function BlueprintStudioWizardInner({
           <h1 className="text-2xl font-bold text-[var(--bismo-text)]">Create Application Blueprint</h1>
           <p className="text-sm text-[var(--bismo-text-muted)]">Authoring & Interconnection Studio</p>
         </div>
-        <WizardStepper steps={STEPS} activeIndex={step} />
+        <div className="flex flex-wrap items-center gap-3">
+          {blueprint && (
+            <>
+              <AppBlueprintStatusBadge status={blueprint.status} />
+              {canEdit && (
+                <Button size="sm" variant="destructive" onClick={() => setDeleteOpen(true)}>
+                  Delete
+                </Button>
+              )}
+            </>
+          )}
+          <WizardStepper steps={STEPS} activeIndex={step} />
+        </div>
       </div>
 
       {draftId && isLoading && <p className="text-sm text-[var(--bismo-text-muted)]">Loading draft…</p>}
@@ -56,6 +83,7 @@ function BlueprintStudioWizardInner({
       {step === 0 && (
         <BlueprintStudioStep1
           existing={blueprint ?? null}
+          canEdit={canEdit}
           onCreated={handleCreated}
           onSaved={() => setStep(1)}
         />
@@ -93,6 +121,28 @@ function BlueprintStudioWizardInner({
           </button>
         </div>
       )}
+
+      {blueprint && (
+        <ConfirmDialog
+          open={deleteOpen}
+          onOpenChange={setDeleteOpen}
+          title={`Delete "${blueprint.name}"?`}
+          description="This permanently removes the blueprint and all of its specifications. This can't be undone."
+          confirmLabel="Delete"
+          isPending={deleteBlueprint.isPending}
+          onConfirm={() => {
+            setDeleteError(null);
+            deleteBlueprint.mutate(blueprint.id, {
+              onSuccess: () => {
+                setDeleteOpen(false);
+                navigate({ to: "/app-blueprints" });
+              },
+              onError: (err) => setDeleteError(err instanceof ApiError ? err.message : "Something went wrong"),
+            });
+          }}
+        />
+      )}
+      {deleteError && <p className="text-sm text-[var(--bismo-status-rejected)]">{deleteError}</p>}
     </div>
   );
 }

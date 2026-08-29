@@ -1,5 +1,7 @@
-import { useState } from "react";
+import { useState, type ReactNode } from "react";
+import { ChevronRight, FilePlus, FileText, Folder, FolderOpen, FolderPlus, MoreVertical, Trash2 } from "lucide-react";
 import { cn } from "../lib/cn";
+import { DropdownMenu } from "./DropdownMenu";
 
 export interface FileTreeFile {
   id: string;
@@ -52,73 +54,89 @@ export function FileTree({
     });
 
   return (
-    <div className={cn("flex flex-col gap-1 overflow-y-auto", className)}>
+    <div className={cn("flex flex-col gap-0.5 overflow-y-auto text-sm", className)}>
       {rootFile && (
-        <FileRow file={rootFile} selected={selectedFileId === rootFile.id} onSelect={onSelectFile} depth={0} />
+        <FileRow file={rootFile} selected={selectedFileId === rootFile.id} onSelect={onSelectFile} />
       )}
-      {sections.map((section) => (
-        <div key={section.slug} className="mt-1">
-          <div className="flex items-center justify-between px-2 py-1">
-            <span className="text-xs font-semibold uppercase tracking-wide text-[var(--bismo-text-muted)]">
-              {section.label}
-            </span>
-            <div className="flex gap-2">
-              <button
-                type="button"
-                onClick={() => onAddFolder(section.slug, null)}
-                className="text-xs text-[var(--bismo-accent-blueprint)] hover:underline"
-              >
-                + New Folder
-              </button>
-              <button
-                type="button"
-                onClick={() => onAddSpec(section.slug, null)}
-                className="text-xs text-[var(--bismo-accent-blueprint)] hover:underline"
-              >
-                + Add Spec
-              </button>
+      {sections.map((section) => {
+        const isEmpty = section.files.length === 0 && section.folders.length === 0;
+        return (
+          <div key={section.slug} className="mt-1">
+            <div className="flex items-center justify-between gap-1 rounded-md px-2 py-1">
+              <span className="truncate text-[11px] font-semibold uppercase tracking-wide text-[var(--bismo-text-muted)]">
+                {section.label}
+              </span>
+              <div className="flex flex-shrink-0 items-center gap-0.5">
+                <IconButton title="New folder" onClick={() => onAddFolder(section.slug, null)}>
+                  <FolderPlus size={14} strokeWidth={1.75} />
+                </IconButton>
+                <IconButton title="Add spec" onClick={() => onAddSpec(section.slug, null)}>
+                  <FilePlus size={14} strokeWidth={1.75} />
+                </IconButton>
+              </div>
             </div>
+            {isEmpty ? (
+              <p className="ml-3 border-l border-[var(--bismo-border)] py-1 pl-3 text-xs text-[var(--bismo-text-muted)]">
+                No files yet.
+              </p>
+            ) : (
+              <div className="ml-3 flex flex-col gap-0.5 border-l border-[var(--bismo-border)] pl-2">
+                {section.folders.map((folder) => (
+                  <FolderRow
+                    key={folder.id}
+                    folder={folder}
+                    sectionSlug={section.slug}
+                    expanded={expanded}
+                    onToggle={toggle}
+                    selectedFileId={selectedFileId}
+                    onSelectFile={onSelectFile}
+                    onAddSpec={onAddSpec}
+                    onAddFolder={onAddFolder}
+                    onDeleteFolder={onDeleteFolder}
+                  />
+                ))}
+                {section.files.map((file) => (
+                  <FileRow
+                    key={file.id}
+                    file={file}
+                    selected={selectedFileId === file.id}
+                    onSelect={onSelectFile}
+                  />
+                ))}
+              </div>
+            )}
           </div>
-          {section.files.length === 0 && section.folders.length === 0 ? (
-            <p className="px-4 py-1 text-xs text-[var(--bismo-text-muted)]">No files yet.</p>
-          ) : (
-            <>
-              {section.folders.map((folder) => (
-                <FolderRow
-                  key={folder.id}
-                  folder={folder}
-                  sectionSlug={section.slug}
-                  depth={1}
-                  expanded={expanded}
-                  onToggle={toggle}
-                  selectedFileId={selectedFileId}
-                  onSelectFile={onSelectFile}
-                  onAddSpec={onAddSpec}
-                  onAddFolder={onAddFolder}
-                  onDeleteFolder={onDeleteFolder}
-                />
-              ))}
-              {section.files.map((file) => (
-                <FileRow
-                  key={file.id}
-                  file={file}
-                  selected={selectedFileId === file.id}
-                  onSelect={onSelectFile}
-                  depth={1}
-                />
-              ))}
-            </>
-          )}
-        </div>
-      ))}
+        );
+      })}
     </div>
+  );
+}
+
+function IconButton({
+  title,
+  onClick,
+  children,
+}: {
+  title: string;
+  onClick: () => void;
+  children: ReactNode;
+}) {
+  return (
+    <button
+      type="button"
+      title={title}
+      aria-label={title}
+      onClick={onClick}
+      className="flex h-6 w-6 items-center justify-center rounded text-[var(--bismo-text-muted)] transition-colors hover:bg-[var(--bismo-bg-hover)] hover:text-[var(--bismo-accent-blueprint)]"
+    >
+      {children}
+    </button>
   );
 }
 
 function FolderRow({
   folder,
   sectionSlug,
-  depth,
   expanded,
   onToggle,
   selectedFileId,
@@ -129,7 +147,6 @@ function FolderRow({
 }: {
   folder: FileTreeFolder;
   sectionSlug: string;
-  depth: number;
   expanded: Set<string>;
   onToggle: (id: string) => void;
   selectedFileId: string | null;
@@ -139,54 +156,66 @@ function FolderRow({
   onDeleteFolder?: (sectionSlug: string, folderId: string) => void;
 }) {
   const isOpen = expanded.has(folder.id);
+  const isEmpty = folder.folders.length === 0 && folder.files.length === 0;
+
   return (
     <div>
-      <div
-        className="flex items-center justify-between rounded-md px-2 py-1.5 hover:bg-[var(--bismo-bg-hover)]"
-        style={{ marginLeft: depth * 12 }}
-      >
+      <div className="flex items-center gap-1 rounded-md px-1.5 py-1.5 hover:bg-[var(--bismo-bg-hover)]">
         <button
           type="button"
           onClick={() => onToggle(folder.id)}
-          className="flex items-center gap-1.5 text-xs text-[var(--bismo-text)]"
+          className="flex min-w-0 flex-1 items-center gap-1.5 text-left"
         >
-          <span className="text-[var(--bismo-text-muted)]">{isOpen ? "▾" : "▸"}</span>
-          📁 {folder.name}/
-        </button>
-        <div className="flex gap-2">
-          <button
-            type="button"
-            onClick={() => onAddFolder(sectionSlug, folder.path)}
-            className="text-[10px] text-[var(--bismo-accent-blueprint)] hover:underline"
-          >
-            +Folder
-          </button>
-          <button
-            type="button"
-            onClick={() => onAddSpec(sectionSlug, folder.path)}
-            className="text-[10px] text-[var(--bismo-accent-blueprint)] hover:underline"
-          >
-            +Spec
-          </button>
-          {onDeleteFolder && (
-            <button
-              type="button"
-              onClick={() => onDeleteFolder(sectionSlug, folder.id)}
-              className="text-[10px] text-[var(--bismo-status-rejected)] hover:underline"
-            >
-              Delete
-            </button>
+          <ChevronRight
+            size={14}
+            strokeWidth={1.75}
+            className={cn(
+              "flex-shrink-0 text-[var(--bismo-text-muted)] transition-transform",
+              isOpen && "rotate-90",
+            )}
+          />
+          {isOpen ? (
+            <FolderOpen size={15} strokeWidth={1.75} className="flex-shrink-0 text-[var(--bismo-accent-blueprint)]" />
+          ) : (
+            <Folder size={15} strokeWidth={1.75} className="flex-shrink-0 text-[var(--bismo-accent-blueprint)]" />
           )}
-        </div>
+          <span className="truncate text-[var(--bismo-text)]">{folder.name}</span>
+        </button>
+        <DropdownMenu
+          trigger={<MoreVertical size={14} />}
+          stopTriggerPropagation
+          items={[
+            {
+              label: "New Folder",
+              icon: <FolderPlus size={14} strokeWidth={1.75} />,
+              onSelect: () => onAddFolder(sectionSlug, folder.path),
+            },
+            {
+              label: "New Spec",
+              icon: <FilePlus size={14} strokeWidth={1.75} />,
+              onSelect: () => onAddSpec(sectionSlug, folder.path),
+            },
+            ...(onDeleteFolder
+              ? ([
+                  "separator",
+                  {
+                    label: "Delete",
+                    icon: <Trash2 size={14} strokeWidth={1.75} />,
+                    destructive: true,
+                    onSelect: () => onDeleteFolder(sectionSlug, folder.id),
+                  },
+                ] as const)
+              : []),
+          ]}
+        />
       </div>
       {isOpen && (
-        <div>
+        <div className="ml-3 flex flex-col gap-0.5 border-l border-[var(--bismo-border)] pl-2">
           {folder.folders.map((child) => (
             <FolderRow
               key={child.id}
               folder={child}
               sectionSlug={sectionSlug}
-              depth={depth + 1}
               expanded={expanded}
               onToggle={onToggle}
               selectedFileId={selectedFileId}
@@ -197,19 +226,9 @@ function FolderRow({
             />
           ))}
           {folder.files.map((file) => (
-            <FileRow
-              key={file.id}
-              file={file}
-              selected={selectedFileId === file.id}
-              onSelect={onSelectFile}
-              depth={depth + 1}
-            />
+            <FileRow key={file.id} file={file} selected={selectedFileId === file.id} onSelect={onSelectFile} />
           ))}
-          {folder.folders.length === 0 && folder.files.length === 0 && (
-            <p className="px-2 py-1 text-xs text-[var(--bismo-text-muted)]" style={{ marginLeft: (depth + 1) * 12 }}>
-              Empty folder.
-            </p>
-          )}
+          {isEmpty && <p className="py-1 text-xs text-[var(--bismo-text-muted)]">Empty folder.</p>}
         </div>
       )}
     </div>
@@ -220,26 +239,23 @@ function FileRow({
   file,
   selected,
   onSelect,
-  depth,
 }: {
   file: FileTreeFile;
   selected: boolean;
   onSelect: (id: string) => void;
-  depth: number;
 }) {
   return (
     <button
       type="button"
       onClick={() => onSelect(file.id)}
-      style={{ marginLeft: depth * 12 }}
       className={cn(
-        "block rounded-md px-2 py-1.5 text-left font-mono text-xs transition-colors hover:bg-[var(--bismo-bg-hover)]",
-        selected
-          ? "bg-[var(--bismo-bg-hover)] text-[var(--bismo-text)]"
-          : "text-[var(--bismo-text-muted)]",
+        "flex items-center gap-1.5 rounded-md px-1.5 py-1.5 text-left font-mono text-xs transition-colors hover:bg-[var(--bismo-bg-hover)]",
+        selected ? "bg-[var(--bismo-bg-hover)] text-[var(--bismo-text)]" : "text-[var(--bismo-text-muted)]",
       )}
     >
-      {file.filename}
+      <span className="w-3.5 flex-shrink-0" aria-hidden="true" />
+      <FileText size={15} strokeWidth={1.75} className="flex-shrink-0" />
+      <span className="truncate">{file.filename}</span>
     </button>
   );
 }

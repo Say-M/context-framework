@@ -19,6 +19,9 @@ export {
   type FileTreeProps,
 } from "./components/FileTree";
 export { ConfirmDialog, type ConfirmDialogProps } from "./components/ConfirmDialog";
+export { Select, type SelectOption, type SelectProps } from "./components/Select";
+export { Checkbox, type CheckboxProps } from "./components/Checkbox";
+export { DropdownMenu, type DropdownMenuItem, type DropdownMenuProps } from "./components/DropdownMenu";
 export {
   VersionHistoryPanel,
   type VersionHistoryEntry,

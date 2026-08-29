@@ -8,7 +8,7 @@ import { ApiError } from "@/lib/api-client";
 import { useBusinessDomains } from "@/features/business-domain/queries";
 import { useBusinessModels } from "@/features/business-model/queries";
 import { useOrgContexts } from "@/features/org-context/queries";
-import { useCreateAppBlueprint, useUpdateConnections } from "../queries";
+import { useCreateAppBlueprint, useUpdateAppBlueprintMetadata, useUpdateConnections } from "../queries";
 
 const metadataSchema = z.object({
   namespace: z
@@ -23,10 +23,13 @@ type MetadataValues = z.infer<typeof metadataSchema>;
 
 export function BlueprintStudioStep1({
   existing,
+  canEdit,
   onCreated,
   onSaved,
 }: {
   existing: AppBlueprint | null;
+  /** Whether the current user may modify this existing blueprint (owner + draft/rejected, or admin). Irrelevant when creating a new one. */
+  canEdit: boolean;
   onCreated: (blueprint: AppBlueprint) => void;
   onSaved: () => void;
 }) {
@@ -45,6 +48,7 @@ export function BlueprintStudioStep1({
 
   const createBlueprint = useCreateAppBlueprint();
   const updateConnections = useUpdateConnections(existing?.id ?? "none");
+  const updateMetadata = useUpdateAppBlueprintMetadata(existing?.id ?? "none");
 
   const {
     register,
@@ -69,11 +73,19 @@ export function BlueprintStudioStep1({
     }
     try {
       if (existing) {
-        await updateConnections.mutateAsync({
-          domainIds,
-          modelId: modelId[0]!,
-          orgContextId: orgContextId[0]!,
-        });
+        await Promise.all([
+          updateConnections.mutateAsync({
+            domainIds,
+            modelId: modelId[0]!,
+            orgContextId: orgContextId[0]!,
+          }),
+          canEdit
+            ? updateMetadata.mutateAsync({
+                name: values.name,
+                description: values.description ?? "",
+              })
+            : Promise.resolve(),
+        ]);
         onSaved();
       } else {
         const created = await createBlueprint.mutateAsync({
@@ -147,7 +159,7 @@ export function BlueprintStudioStep1({
             <Input
               id="bp-name"
               placeholder="Source-to-Pay Application Blueprint"
-              disabled={!!existing}
+              disabled={!!existing && !canEdit}
               {...register("name")}
             />
           </FormField>
@@ -156,14 +168,24 @@ export function BlueprintStudioStep1({
           <Textarea
             id="bp-description"
             placeholder="12 Technical execution specifications for..."
-            disabled={!!existing}
+            disabled={!!existing && !canEdit}
             {...register("description")}
           />
         </FormField>
+        {!!existing && !canEdit && (
+          <p className="text-xs text-[var(--bismo-text-muted)]">
+            This blueprint is approved or owned by someone else, so it's read-only — only an admin or its
+            author (while draft/rejected) can change it.
+          </p>
+        )}
         {serverError && <p className="text-sm text-[var(--bismo-status-rejected)]">{serverError}</p>}
         <div className="flex justify-end">
-          <Button type="submit" disabled={isSubmitting} className="bg-[var(--bismo-accent-blueprint)]">
-            {isSubmitting ? "Saving…" : existing ? "Save Connections & Continue" : "Create Draft & Continue"}
+          <Button
+            type="submit"
+            disabled={isSubmitting || (!!existing && !canEdit)}
+            className="bg-[var(--bismo-accent-blueprint)]"
+          >
+            {isSubmitting ? "Saving…" : existing ? "Save Changes & Continue" : "Create Draft & Continue"}
           </Button>
         </div>
       </form>

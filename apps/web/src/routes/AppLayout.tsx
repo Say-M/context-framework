@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { createRoute, Navigate, Outlet } from "@tanstack/react-router";
+import { Menu } from "lucide-react";
 import { rootRoute } from "./__root";
 import { useAuth } from "@/context/AuthContext";
 import { Sidebar } from "@/components/Sidebar";
@@ -21,14 +22,7 @@ function AppLayoutComponent() {
             aria-label="Open menu"
             className="flex h-9 w-9 items-center justify-center rounded-md border border-[var(--bismo-border)] text-[var(--bismo-text)]"
           >
-            <svg width="18" height="18" viewBox="0 0 18 18" fill="none" aria-hidden="true">
-              <path
-                d="M2 4.5h14M2 9h14M2 13.5h14"
-                stroke="currentColor"
-                strokeWidth="1.5"
-                strokeLinecap="round"
-              />
-            </svg>
+            <Menu size={18} strokeWidth={1.75} />
           </button>
           <span className="text-sm font-bold text-[var(--bismo-text)]">BISMO</span>
         </header>

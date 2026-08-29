@@ -1,6 +1,6 @@
 import { useState } from "react";
 import type { PublicUser, Role } from "@bismo/shared-schemas";
-import { Button, StatusBadge } from "@bismo/ui";
+import { Button, Select, StatusBadge } from "@bismo/ui";
 import { useAuth } from "@/context/AuthContext";
 import { ApiError } from "@/lib/api-client";
 import { useUpdateUserRole, useUpdateUserStatus, useUsers } from "../queries";
@@ -71,15 +71,16 @@ export function UserTable() {
                   </td>
                   <td className="px-4 py-2 text-[var(--bismo-text-muted)]">{user.email}</td>
                   <td className="px-4 py-2">
-                    <select
+                    <Select
                       value={user.role}
                       disabled={isSelf || updateRole.isPending}
-                      onChange={(e) => handleRoleChange(user.id, e.target.value as Role)}
-                      className="rounded-md border border-[var(--bismo-border)] bg-[var(--bismo-bg)] px-2 py-1 text-sm text-[var(--bismo-text)] disabled:opacity-50"
-                    >
-                      <option value="author">Author</option>
-                      <option value="admin">Admin</option>
-                    </select>
+                      onValueChange={(role) => handleRoleChange(user.id, role as Role)}
+                      options={[
+                        { value: "author", label: "Author" },
+                        { value: "admin", label: "Admin" },
+                      ]}
+                      className="min-w-28"
+                    />
                   </td>
                   <td className="px-4 py-2">
                     <StatusBadge variant={STATUS_VARIANT[user.status]}>
