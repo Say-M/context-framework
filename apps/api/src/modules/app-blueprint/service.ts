@@ -1,4 +1,5 @@
 import { HTTPException } from "hono/http-exception";
+import type { ClientSession } from "mongoose";
 import {
   AppBlueprintModel,
   BlueprintFolderModel,
@@ -8,7 +9,9 @@ import {
   SpecificationModel,
   type AppBlueprintDocument,
   type BlueprintFolderDocument,
+  type SpecificationDocument,
 } from "@bismo/db-models";
+import { withTransaction } from "../../config/db";
 import {
   BLUEPRINT_SECTIONS,
   type BlueprintSection,
@@ -104,42 +107,61 @@ export async function createAppBlueprint(input: CreateAppBlueprintInput, actor: 
   }
   await assertConnectionsExist(input);
 
-  const doc = await AppBlueprintModel.create({
-    namespace: input.namespace,
-    name: input.name,
-    description: input.description,
-    connections: {
-      domainIds: input.domainIds,
-      modelId: input.modelId,
-      orgContextId: input.orgContextId,
-    },
-    createdBy: actor.id,
-  });
+  // Blueprint create + root spec create + wiring rootSpecId back onto the
+  // blueprint are one logical unit — without a transaction, a crash between
+  // any of these steps leaves either an orphaned root Specification or a
+  // blueprint with a null rootSpecId.
+  return withTransaction(async (session) => {
+    // Mongoose's array-form create() (required to pass a session) types its
+    // result as T[], not a fixed-length tuple — a single-element input
+    // always yields a single-element result, so `[0]!` is safe here.
+    const [doc] = (await AppBlueprintModel.create(
+      [
+        {
+          namespace: input.namespace,
+          name: input.name,
+          description: input.description,
+          connections: {
+            domainIds: input.domainIds,
+            modelId: input.modelId,
+            orgContextId: input.orgContextId,
+          },
+          createdBy: actor.id,
+        },
+      ],
+      { session },
+    )) as [AppBlueprintDocument];
 
-  const staleAfter = new Date();
-  staleAfter.setDate(staleAfter.getDate() + DEFAULT_STALE_AFTER_DAYS);
-  const rootSpec = await SpecificationModel.create({
-    parentType: "AppBlueprint",
-    parentId: doc._id,
-    section: null,
-    filename: "blueprint.md",
-    path: "blueprint.md",
-    title: `${input.name} Overview`,
-    summary: "Root overview document for this application blueprint.",
-    frontmatter: {
-      type: ROOT_SPEC_FRONTMATTER_TYPE,
-      trustTier: DEFAULT_TRUST_TIER,
-      status: DEFAULT_STATUS_LABEL,
-      staleAfter,
-    },
-    content: `# ${input.name}\n\n${input.description}\n`,
-    rawSource: "",
-    createdBy: actor.id,
-  });
+    const staleAfter = new Date();
+    staleAfter.setDate(staleAfter.getDate() + DEFAULT_STALE_AFTER_DAYS);
+    const [rootSpec] = (await SpecificationModel.create(
+      [
+        {
+          parentType: "AppBlueprint",
+          parentId: doc._id,
+          section: null,
+          filename: "blueprint.md",
+          path: "blueprint.md",
+          title: `${input.name} Overview`,
+          summary: "Root overview document for this application blueprint.",
+          frontmatter: {
+            type: ROOT_SPEC_FRONTMATTER_TYPE,
+            trustTier: DEFAULT_TRUST_TIER,
+            status: DEFAULT_STATUS_LABEL,
+            staleAfter,
+          },
+          content: `# ${input.name}\n\n${input.description}\n`,
+          rawSource: "",
+          createdBy: actor.id,
+        },
+      ],
+      { session },
+    )) as [SpecificationDocument];
 
-  doc.rootSpecId = rootSpec._id;
-  await doc.save();
-  return doc;
+    doc.rootSpecId = rootSpec._id;
+    await doc.save({ session });
+    return doc;
+  });
 }
 
 /** Owner may mutate only while draft/rejected; admin may mutate anytime. */
@@ -170,12 +192,17 @@ async function reopenIfApproved(doc: AppBlueprintDocument) {
   doc.reviewedAt = null;
 }
 
-/** Called by specifications/service.ts after a spec under an AppBlueprint changes. */
-export async function reopenAppBlueprintIfApprovedById(id: string) {
-  const doc = await AppBlueprintModel.findById(id);
+/**
+ * Called by specifications/service.ts after a spec under an AppBlueprint
+ * changes — accepts an optional `session` so this write joins the caller's
+ * transaction instead of committing separately from the spec write that
+ * triggered it.
+ */
+export async function reopenAppBlueprintIfApprovedById(id: string, session?: ClientSession) {
+  const doc = await AppBlueprintModel.findById(id).session(session ?? null);
   if (!doc) return;
   await reopenIfApproved(doc);
-  await doc.save();
+  await doc.save({ session });
 }
 
 export async function updateConnections(id: string, input: ConnectionsInput, actor: AuthUser) {
@@ -209,8 +236,14 @@ export async function updateAppBlueprintMetadata(
 export async function deleteAppBlueprint(id: string, actor: AuthUser) {
   const doc = await getAppBlueprint(id);
   assertCanMutate(doc, actor);
-  await SpecificationModel.deleteMany({ parentType: "AppBlueprint", parentId: doc._id });
-  await doc.deleteOne();
+  // Without a transaction, a crash between these two deletes either leaves
+  // orphaned Specifications pointing at a deleted blueprint, or (if it
+  // crashed before the specs delete somehow completed) a blueprint whose
+  // rootSpecId no longer resolves.
+  await withTransaction(async (session) => {
+    await SpecificationModel.deleteMany({ parentType: "AppBlueprint", parentId: doc._id }, { session });
+    await doc.deleteOne({ session });
+  });
 }
 
 interface SpecSummary {
@@ -335,13 +368,21 @@ export async function deleteBlueprintFolder(blueprintId: string, folderId: strin
   const paths = descendants.map((f) => f.path);
   const folderIds = descendants.map((f) => f._id);
 
-  await SpecificationModel.deleteMany({
-    parentType: "AppBlueprint",
-    parentId: blueprintId,
-    section: folder.section,
-    folderPath: { $in: paths },
+  // Without a transaction, a crash between these two deletes leaves either
+  // specs orphaned under a now-deleted folder path, or deleted specs whose
+  // folder rows still show up in the tree as (falsely) empty.
+  await withTransaction(async (session) => {
+    await SpecificationModel.deleteMany(
+      {
+        parentType: "AppBlueprint",
+        parentId: blueprintId,
+        section: folder.section,
+        folderPath: { $in: paths },
+      },
+      { session },
+    );
+    await BlueprintFolderModel.deleteMany({ _id: { $in: folderIds } }, { session });
   });
-  await BlueprintFolderModel.deleteMany({ _id: { $in: folderIds } });
 }
 
 /** Live preview of what Publish would generate — doesn't persist anything. */

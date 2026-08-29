@@ -46,6 +46,11 @@ export {
   type GeneratedAppDocument,
   type GeneratedAppAttrs,
 } from "./GeneratedApp.model";
+export {
+  ChatMessageModel,
+  type ChatMessageDocument,
+  type ChatMessageAttrs,
+} from "./ChatMessage.model";
 export { approvablePlugin, type ApprovableFields } from "./plugins/approvable.plugin";
 export { fieldEncryptionPlugin } from "./plugins/fieldEncryption.plugin";
 export {

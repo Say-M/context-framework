@@ -1,5 +1,6 @@
 import { addDays } from "date-fns";
 import { HTTPException } from "hono/http-exception";
+import type { ClientSession } from "mongoose";
 import { BlueprintFolderModel, SpecificationModel, type SpecificationDocument } from "@bismo/db-models";
 import type {
   CreateSpecificationInput,
@@ -10,6 +11,7 @@ import { getContentTypeByParentType, type ContentTypeEntry } from "../../lib/con
 import { buildRawSource } from "../../lib/specification-format";
 import { getSpecVersionHistory, snapshotSpecVersion } from "../../lib/versioning";
 import type { AuthUser } from "../../middleware/auth";
+import { withTransaction } from "../../config/db";
 import { reopenAppBlueprintIfApprovedById } from "../app-blueprint/service";
 
 const DEFAULT_TRUST_TIER = "human-reviewed";
@@ -93,9 +95,9 @@ function assertCanManageSpecs(parentCreatedBy: unknown, actor: AuthUser) {
  * step. Only fires if the parent is still 'approved' at the moment this
  * runs (the filter makes it a no-op otherwise).
  */
-async function reopenParentIfApproved(entry: ContentTypeEntry, parentId: unknown) {
+async function reopenParentIfApproved(entry: ContentTypeEntry, parentId: unknown, session?: ClientSession) {
   if (entry.parentType === "AppBlueprint") {
-    await reopenAppBlueprintIfApprovedById(String(parentId));
+    await reopenAppBlueprintIfApprovedById(String(parentId), session);
     return;
   }
   await entry.Model.updateOne(
@@ -109,6 +111,7 @@ async function reopenParentIfApproved(entry: ContentTypeEntry, parentId: unknown
         submittedAt: new Date(),
       },
     },
+    { session },
   );
 }
 
@@ -157,21 +160,41 @@ export async function createSpecification(input: CreateSpecificationInput, actor
   };
   const rawSource = buildRawSource({ ...frontmatter, title: input.title }, input.content);
 
-  let doc: SpecificationDocument;
+  // Spec create + parent specCount bump + (conditionally) reopening the
+  // parent for re-review are one logical unit — without a transaction, a
+  // crash mid-way leaves the parent's specCount undercounted, or an
+  // approved parent that silently gained content without going back for
+  // re-review.
   try {
-    doc = await SpecificationModel.create({
-      parentType: input.parentType,
-      parentId: input.parentId,
-      section: input.section,
-      folderPath: input.folderPath,
-      filename: input.filename,
-      path,
-      title: input.title,
-      summary: input.summary,
-      frontmatter,
-      content: input.content,
-      rawSource,
-      createdBy: actor.id,
+    return await withTransaction(async (session) => {
+      const [doc] = (await SpecificationModel.create(
+        [
+          {
+            parentType: input.parentType,
+            parentId: input.parentId,
+            section: input.section,
+            folderPath: input.folderPath,
+            filename: input.filename,
+            path,
+            title: input.title,
+            summary: input.summary,
+            frontmatter,
+            content: input.content,
+            rawSource,
+            createdBy: actor.id,
+          },
+        ],
+        { session },
+      )) as [SpecificationDocument];
+
+      await entry.Model.updateOne({ _id: parent._id }, { $inc: { specCount: 1 } }, { session });
+      // Adding new content under an approved parent is still a substantive
+      // change to what was reviewed, even though the new file has no prior
+      // version of its own to preserve.
+      if (parent.status === "approved") {
+        await reopenParentIfApproved(entry, parent._id, session);
+      }
+      return doc;
     });
   } catch (err) {
     if (err instanceof Error && "code" in err && (err as { code?: number }).code === 11000) {
@@ -179,15 +202,6 @@ export async function createSpecification(input: CreateSpecificationInput, actor
     }
     throw err;
   }
-
-  await entry.Model.updateOne({ _id: parent._id }, { $inc: { specCount: 1 } });
-  // Adding new content under an approved parent is still a substantive
-  // change to what was reviewed, even though the new file has no prior
-  // version of its own to preserve.
-  if (parent.status === "approved") {
-    await reopenParentIfApproved(entry, parent._id);
-  }
-  return doc;
 }
 
 export async function updateSpecification(
@@ -200,15 +214,12 @@ export async function updateSpecification(
   assertCanManageSpecs(parent.createdBy, actor);
 
   const parentWasApproved = parent.status === "approved";
+  // Captured before any in-memory edits below — this is the "about to be
+  // superseded" state, not the new one.
+  const preEditSnapshot = parentWasApproved ? serializeSpecification(doc) : null;
+  const preEditVersion = doc.version;
+
   if (parentWasApproved) {
-    await snapshotSpecVersion({
-      specificationId: id,
-      version: doc.version,
-      snapshot: serializeSpecification(doc),
-      createdBy: String(doc.createdBy),
-      approvedBy: parent.reviewedBy ? String(parent.reviewedBy) : null,
-      approvedAt: parent.reviewedAt,
-    });
     doc.version += 1;
   }
 
@@ -229,11 +240,31 @@ export async function updateSpecification(
     );
   }
 
-  await doc.save();
-  if (parentWasApproved) {
-    await reopenParentIfApproved(entry, parent._id);
-  }
-  return doc;
+  // Snapshot + save + (conditionally) reopening the parent are one logical
+  // unit — without a transaction, a crash mid-way leaves a ContentVersion
+  // row for a version that was never actually superseded, or an approved
+  // parent whose content changed without going back for re-review.
+  return withTransaction(async (session) => {
+    if (parentWasApproved && preEditSnapshot) {
+      await snapshotSpecVersion(
+        {
+          specificationId: id,
+          version: preEditVersion,
+          snapshot: preEditSnapshot,
+          createdBy: String(doc.createdBy),
+          approvedBy: parent.reviewedBy ? String(parent.reviewedBy) : null,
+          approvedAt: parent.reviewedAt,
+        },
+        session,
+      );
+    }
+
+    await doc.save({ session });
+    if (parentWasApproved) {
+      await reopenParentIfApproved(entry, parent._id, session);
+    }
+    return doc;
+  });
 }
 
 export async function deleteSpecification(id: string, actor: AuthUser) {
@@ -241,9 +272,15 @@ export async function deleteSpecification(id: string, actor: AuthUser) {
   const { entry, parent } = await loadParentOrThrow(doc.parentType, String(doc.parentId));
   assertCanManageSpecs(parent.createdBy, actor);
 
-  await doc.deleteOne();
-  await entry.Model.updateOne({ _id: parent._id }, { $inc: { specCount: -1 } });
-  if (parent.status === "approved") {
-    await reopenParentIfApproved(entry, parent._id);
-  }
+  // Delete + parent specCount decrement + (conditionally) reopening the
+  // parent are one logical unit — without a transaction, a crash mid-way
+  // leaves the parent's specCount overcounted, or an approved parent stale
+  // after content was actually removed.
+  await withTransaction(async (session) => {
+    await doc.deleteOne({ session });
+    await entry.Model.updateOne({ _id: parent._id }, { $inc: { specCount: -1 } }, { session });
+    if (parent.status === "approved") {
+      await reopenParentIfApproved(entry, parent._id, session);
+    }
+  });
 }

@@ -1,4 +1,4 @@
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
 
 // Access token lives only in memory (never localStorage) — PlatformAuthContext
 // is the sole writer via setAccessToken, populated at signup/login/refresh.
@@ -8,6 +8,11 @@ let refreshInFlight: Promise<boolean> | null = null;
 
 export function setAccessToken(token: string | null) {
   accessToken = token;
+}
+
+/** Read-only access for anything that needs the current token outside a fetch — e.g. the socket handshake. */
+export function getAccessToken() {
+  return accessToken;
 }
 
 export function setSessionExpiredHandler(handler: () => void) {

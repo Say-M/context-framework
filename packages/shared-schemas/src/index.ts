@@ -11,3 +11,4 @@ export * from "./version.schema";
 export * from "./platform-auth.schema";
 export * from "./catalog.schema";
 export * from "./generated-app.schema";
+export * from "./chat-message.schema";

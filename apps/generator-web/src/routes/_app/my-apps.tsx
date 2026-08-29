@@ -1,16 +1,23 @@
+import { useState } from "react";
 import { createRoute, Link } from "@tanstack/react-router";
-import { Card, CardDescription, CardFooter, CardTitle, StatusBadge } from "@bismo/ui";
+import { Trash2 } from "lucide-react";
+import { Card, CardDescription, CardFooter, CardTitle, ConfirmDialog, StatusBadge } from "@bismo/ui";
 import { appLayoutRoute } from "../AppLayout";
-import { useMyGeneratedApps } from "@/features/generated-apps/queries";
+import { useDeleteGeneratedApp, useMyGeneratedApps } from "@/features/generated-apps/queries";
 
 function MyAppsPage() {
   const { data, isLoading } = useMyGeneratedApps();
+  const deleteGeneratedApp = useDeleteGeneratedApp();
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
 
   return (
     <div className="flex flex-col gap-6">
       <div>
         <h1 className="text-lg font-bold text-[var(--bismo-text)]">My Apps</h1>
-        <p className="text-sm text-[var(--bismo-text-muted)]">Applications you've generated from the catalog.</p>
+        <p className="text-sm text-[var(--bismo-text-muted)]">
+          Applications you've generated from the catalog — generate as many as you like from the same
+          blueprint.
+        </p>
       </div>
       {isLoading && <p className="text-sm text-[var(--bismo-text-muted)]">Loading…</p>}
       {!isLoading && data?.items.length === 0 && (
@@ -32,7 +39,7 @@ function MyAppsPage() {
             <div className="mt-2">
               <StatusBadge variant="neutral">{app.status}</StatusBadge>
             </div>
-            <CardFooter>
+            <CardFooter className="justify-between">
               <Link
                 to="/my-apps/$id"
                 params={{ id: app.id }}
@@ -40,10 +47,33 @@ function MyAppsPage() {
               >
                 View versions →
               </Link>
+              <button
+                type="button"
+                title="Delete"
+                aria-label="Delete"
+                disabled={app.status === "working"}
+                onClick={() => setDeleteTarget({ id: app.id, name: app.blueprintName })}
+                className="flex h-7 w-7 items-center justify-center rounded text-[var(--bismo-text-muted)] transition-colors hover:bg-[var(--bismo-bg-hover)] hover:text-[var(--bismo-status-rejected)] disabled:pointer-events-none disabled:opacity-40"
+              >
+                <Trash2 size={14} strokeWidth={1.75} />
+              </button>
             </CardFooter>
           </Card>
         ))}
       </div>
+
+      <ConfirmDialog
+        open={!!deleteTarget}
+        onOpenChange={(open) => !open && setDeleteTarget(null)}
+        title="Delete this app?"
+        description={`This permanently deletes "${deleteTarget?.name}" and every version of it. This can't be undone.`}
+        confirmLabel="Delete"
+        isPending={deleteGeneratedApp.isPending}
+        onConfirm={() => {
+          if (!deleteTarget) return;
+          deleteGeneratedApp.mutate(deleteTarget.id, { onSuccess: () => setDeleteTarget(null) });
+        }}
+      />
     </div>
   );
 }

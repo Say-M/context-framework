@@ -8,10 +8,11 @@ export const createGeneratedAppSchema = z.object({
   blueprintId: objectIdSchema,
   database: databaseChoiceSchema,
   frontendFramework: z.string().trim().max(200).optional(),
+  prompt: z.string().trim().max(4000).optional(),
 });
 export type CreateGeneratedAppInput = z.infer<typeof createGeneratedAppSchema>;
 
-export const generatedAppStatusSchema = z.enum(["idle", "working"]);
+export const generatedAppStatusSchema = z.enum(["idle", "working", "failed"]);
 export type GeneratedAppStatus = z.infer<typeof generatedAppStatusSchema>;
 
 export const generatedAppSchema = z.object({
@@ -20,7 +21,9 @@ export const generatedAppSchema = z.object({
   blueprintName: z.string(),
   database: databaseChoiceSchema,
   frontendFramework: z.string(),
+  initialPrompt: z.string(),
   status: generatedAppStatusSchema,
+  lastError: z.string().nullable(),
   createdBy: objectIdSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

@@ -19,33 +19,47 @@ import { userRoutes } from "./modules/users/routes";
 import { platformAuthRoutes } from "./modules/platform-auth/routes";
 import { catalogRoutes } from "./modules/catalog/routes";
 import { generatedAppRoutes } from "./modules/generated-apps/routes";
+import { engine } from "./lib/socket";
+import type { WebSocketData } from "@socket.io/bun-engine";
 
 export const app = new Hono<{ Variables: AppVariables }>();
 
 const DOCS_PATHS = ["/api/v1/docs", "/api/v1/openapi.json"];
+// Everything these three middlewares apply to — deliberately excludes
+// /socket.io/*, which isn't a REST endpoint: the engine.io handshake/polling
+// requests don't want a data-API CSP, rate limiting real-time connections by
+// request count doesn't make sense, and the Engine sets its own CORS headers
+// via the `cors` option passed to it — layering Hono's cors() on top too
+// would risk duplicate/conflicting headers.
+const GUARDED_PATHS = ["/health", "/api/*"] as const;
 
 app.use("*", logger());
-// The strict data-API CSP (default-src 'none', frame-ancestors 'none') would
-// also block the Scalar page's own script/style tags, so the docs routes are
-// deliberately excluded from it below rather than relaxed globally.
-app.use("*", async (c, next) => {
-  if (DOCS_PATHS.includes(c.req.path)) return next();
-  return securityHeaders(c, next);
-});
-app.use(
-  "*",
-  cors({
-    origin: [env.WEB_ORIGIN, env.GENERATOR_WEB_ORIGIN],
-    credentials: true,
-    allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allowHeaders: ["Content-Type", "Authorization"],
-  }),
-);
-app.use("*", defaultRateLimiter);
+for (const path of GUARDED_PATHS) {
+  // The strict data-API CSP (default-src 'none', frame-ancestors 'none')
+  // would also block the Scalar page's own script/style tags, so the docs
+  // routes are deliberately excluded from it below rather than relaxed
+  // globally.
+  app.use(path, async (c, next) => {
+    if (DOCS_PATHS.includes(c.req.path)) return next();
+    return securityHeaders(c, next);
+  });
+  app.use(
+    path,
+    cors({
+      origin: [env.WEB_ORIGIN, env.GENERATOR_WEB_ORIGIN],
+      credentials: true,
+      allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
+      allowHeaders: ["Content-Type", "Authorization"],
+    }),
+  );
+  app.use(path, defaultRateLimiter);
+}
 
 app.onError(errorHandler);
 
 app.get("/health", (c) => c.json({ ok: true }));
+
+app.all("/socket.io/*", (c) => engine.handleRequest(c.req.raw, c.env as Bun.Server<WebSocketData>));
 
 app.route("/api/v1/auth", authRoutes);
 app.route("/api/v1/business-domains", businessDomainRoutes);

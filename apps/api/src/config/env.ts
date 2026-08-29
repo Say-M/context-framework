@@ -40,6 +40,11 @@ const envSchema = z.object({
   JWT_INVITE_SECRET: z.string().min(32),
   PII_ENCRYPTION_KEY: base64OfLength(32, "PII_ENCRYPTION_KEY"),
   EMAIL_HASH_SECRET: base64OfMinLength(32, "EMAIL_HASH_SECRET"),
+  // Only validated for the fail-fast-at-boot guarantee — the Claude Agent
+  // SDK subprocess reads it (and the optional ANTHROPIC_BASE_URL, for
+  // routing through a compatible gateway instead of api.anthropic.com)
+  // straight from its inherited process.env, not from this parsed object.
+  ANTHROPIC_API_KEY: z.string().min(1),
 });
 
 // Parsed once at module load (first import, i.e. app boot) and never again —

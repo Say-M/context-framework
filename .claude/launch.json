@@ -4,13 +4,34 @@
     {
       "name": "web",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "--cwd", "apps/web", "dev"],
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "apps/web",
+        "dev"
+      ],
       "port": 5173
+    },
+    {
+      "name": "generator-web",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "apps/generator-web",
+        "dev"
+      ],
+      "port": 5174
     },
     {
       "name": "api",
       "runtimeExecutable": "bun",
-      "runtimeArgs": ["run", "--cwd", "apps/api", "dev"],
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "apps/api",
+        "dev"
+      ],
       "port": 5500
     }
   ]

@@ -2,18 +2,24 @@ import { Hono } from "hono";
 import { describeRoute, resolver, validator as zValidator } from "hono-openapi";
 import { z } from "zod";
 import {
+  chatMessageSchema,
   createGeneratedAppSchema,
   generatedAppSchema,
   generatedAppVersionSchema,
   objectIdSchema,
+  sendChatMessageSchema,
 } from "@bismo/shared-schemas";
 import { authenticatePlatformUser, type PlatformAppVariables } from "../../middleware/platformAuth";
-import { listResponseSchema } from "../../lib/openapi-responses";
+import { listResponseSchema, okResponseSchema } from "../../lib/openapi-responses";
 import {
   createGeneratedApp,
+  deleteGeneratedApp,
   downloadVersion,
+  getGeneratedApp,
+  listChatMessages,
   listMyGeneratedApps,
   listVersions,
+  sendChatMessage,
   serializeGeneratedApp,
 } from "./service";
 
@@ -71,6 +77,52 @@ generatedAppRoutes.get(
 );
 
 generatedAppRoutes.get(
+  "/:id",
+  describeRoute({
+    tags,
+    summary: "Get a generated app",
+    description: "Poll this for status/lastError while a generation is in progress.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Generated app",
+        content: { "application/json": { schema: resolver(generatedAppSchema) } },
+      },
+    },
+  }),
+  zValidator("param", idParamSchema),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const platformUser = c.get("platformUser");
+    const doc = await getGeneratedApp(id, platformUser.id);
+    return c.json(await serializeGeneratedApp(doc));
+  },
+);
+
+generatedAppRoutes.delete(
+  "/:id",
+  describeRoute({
+    tags,
+    summary: "Delete a generated app",
+    description: "Removes the database record and its on-disk repository. Rejected while status is 'working'.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Deleted",
+        content: { "application/json": { schema: resolver(okResponseSchema) } },
+      },
+    },
+  }),
+  zValidator("param", idParamSchema),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const platformUser = c.get("platformUser");
+    await deleteGeneratedApp(id, platformUser.id);
+    return c.json({ ok: true });
+  },
+);
+
+generatedAppRoutes.get(
   "/:id/versions",
   describeRoute({
     tags,
@@ -89,6 +141,53 @@ generatedAppRoutes.get(
     const platformUser = c.get("platformUser");
     const items = await listVersions(id, platformUser.id);
     return c.json({ items });
+  },
+);
+
+generatedAppRoutes.get(
+  "/:id/messages",
+  describeRoute({
+    tags,
+    summary: "List a generated app's chat history",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Chat messages",
+        content: { "application/json": { schema: resolver(listResponseSchema(chatMessageSchema)) } },
+      },
+    },
+  }),
+  zValidator("param", idParamSchema),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const platformUser = c.get("platformUser");
+    const items = await listChatMessages(id, platformUser.id);
+    return c.json({ items });
+  },
+);
+
+generatedAppRoutes.post(
+  "/:id/messages",
+  describeRoute({
+    tags,
+    summary: "Send a chat message",
+    description: "Runs a fresh agent turn against the app's existing repo. Rejected with 409 while a turn is already in progress.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      201: {
+        description: "The created user message",
+        content: { "application/json": { schema: resolver(chatMessageSchema) } },
+      },
+    },
+  }),
+  zValidator("param", idParamSchema),
+  zValidator("json", sendChatMessageSchema),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const { content, mode } = c.req.valid("json");
+    const platformUser = c.get("platformUser");
+    const message = await sendChatMessage(id, content, mode, platformUser.id);
+    return c.json(message, 201);
   },
 );
 

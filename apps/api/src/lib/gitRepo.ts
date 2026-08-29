@@ -1,6 +1,8 @@
-import { mkdir, rm, writeFile } from "node:fs/promises";
+import { mkdir, rm } from "node:fs/promises";
+import { existsSync } from "node:fs";
 import path from "node:path";
 import { $ } from "bun";
+import { env } from "../config/env";
 
 export interface GitCommit {
   sha: string;
@@ -9,32 +11,44 @@ export interface GitCommit {
   authorDate: string;
 }
 
+/** Where a GeneratedApp's working tree lives on disk — shared by every module that touches it. */
+export function repoDir(generatedAppId: string) {
+  return path.join(env.GENERATED_APPS_DIR, generatedAppId);
+}
+
 // \x1f (unit separator) can't appear in a commit subject, so it's a safe
 // field delimiter for a one-line-per-commit `git log --format`.
 const GIT_LOG_FORMAT = "%H%x1f%h%x1f%s%x1f%aI";
 
 /**
- * Creates a plain (non-bare) git repo with a real working tree at `dir` and
- * makes one commit. Non-bare on purpose: later milestones need an agent to
- * read/write real files here directly, not just a bare object database.
+ * Commits whatever is currently on disk at `dir` — initializing a plain
+ * (non-bare) git repo there first if one doesn't exist yet. Non-bare on
+ * purpose: an agent needs to read/write real files here directly, not just a
+ * bare object database. Reused by every commit-producing step (initial
+ * generation, chat-driven edits) rather than each one writing files and
+ * committing itself.
+ *
+ * A chat turn (unlike initial generation, where the directory starts empty)
+ * may produce no file changes at all — returns `null` in that case instead
+ * of throwing on git's "nothing to commit", so callers can tell "no new
+ * version" apart from a real failure.
  */
-export async function initRepoWithCommit(
-  dir: string,
-  files: Record<string, string>,
-  message: string,
-) {
+export async function commitWorkingTree(dir: string, message: string): Promise<string | null> {
   await mkdir(dir, { recursive: true });
-  for (const [relPath, content] of Object.entries(files)) {
-    const filePath = path.join(dir, relPath);
-    await mkdir(path.dirname(filePath), { recursive: true });
-    await writeFile(filePath, content, "utf8");
+
+  if (!existsSync(path.join(dir, ".git"))) {
+    await $`git init -b main`.cwd(dir).quiet();
+    await $`git config user.name "BISMO Generator"`.cwd(dir).quiet();
+    await $`git config user.email "generator@bismo.local"`.cwd(dir).quiet();
   }
 
-  await $`git init -b main`.cwd(dir).quiet();
-  await $`git config user.name "BISMO Generator"`.cwd(dir).quiet();
-  await $`git config user.email "generator@bismo.local"`.cwd(dir).quiet();
   await $`git add -A`.cwd(dir).quiet();
+  const diff = await $`git diff --cached --quiet`.cwd(dir).quiet().nothrow();
+  if (diff.exitCode === 0) return null;
+
   await $`git commit -m ${message}`.cwd(dir).quiet();
+  const rev = await $`git rev-parse HEAD`.cwd(dir).quiet();
+  return rev.stdout.toString().trim();
 }
 
 export async function listCommits(dir: string): Promise<GitCommit[]> {

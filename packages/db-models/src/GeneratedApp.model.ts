@@ -7,24 +7,29 @@ import {
   type Model,
 } from "mongoose";
 
-// One generated app per (blueprint, platform user) pair — many different
-// public users legitimately generate from the same public blueprint, but
-// each one only ever gets one working tree per blueprint.
+// A platform user may generate any number of apps from the same blueprint
+// (e.g. to try different prompts/database choices) — each is its own
+// working tree, so no uniqueness constraint on (blueprintId, createdBy).
 const generatedAppSchema = new Schema(
   {
     blueprintId: { type: Schema.Types.ObjectId, ref: "AppBlueprint", required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "PlatformUser", required: true },
     database: { type: String, enum: ["mongodb", "postgres"], required: true },
     frontendFramework: { type: String, default: "React + Vite + TanStack Query" },
-    // Unused until the chat-driven iteration milestone, but belongs in the
-    // schema from the start rather than bolted on later: prevents two chat
-    // turns from mutating the same working tree at once.
-    status: { type: String, enum: ["idle", "working"], required: true, default: "idle" },
+    // Extra free-text instructions supplied at creation time, appended to
+    // the generation prompt alongside the blueprint's specs.
+    initialPrompt: { type: String, default: "" },
+    // "working" also guards against two chat turns mutating the same
+    // working tree at once, once the chat-driven iteration milestone lands.
+    status: { type: String, enum: ["idle", "working", "failed"], required: true, default: "idle" },
+    // Populated only when status is "failed" — the agent's error, shown to
+    // the user so a stuck generation isn't a silent dead end.
+    lastError: { type: String, default: null },
   },
   { timestamps: true },
 );
 
-generatedAppSchema.index({ blueprintId: 1, createdBy: 1 }, { unique: true });
+generatedAppSchema.index({ blueprintId: 1, createdBy: 1 });
 
 export type GeneratedAppAttrs = InferSchemaType<typeof generatedAppSchema>;
 export type GeneratedAppDocument = HydratedDocument<GeneratedAppAttrs>;

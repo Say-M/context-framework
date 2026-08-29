@@ -1,3 +1,4 @@
+import type { ClientSession } from "mongoose";
 import { ContentVersionModel } from "@bismo/db-models";
 
 interface SnapshotSpecVersionParams {
@@ -15,19 +16,25 @@ interface SnapshotSpecVersionParams {
  * (BusinessDomain/BusinessModel/OrgContext/AppBlueprint) is 'approved' at
  * edit time, since that's the only case where the existing content is
  * "live" and worth preserving. Write-once — nothing ever updates a
- * ContentVersion row afterward.
+ * ContentVersion row afterward. Accepts an optional `session` so this join
+ * the same transaction as the spec edit that triggers it.
  */
-export async function snapshotSpecVersion(params: SnapshotSpecVersionParams) {
-  await ContentVersionModel.create({
-    parentType: "Specification",
-    parentId: params.specificationId,
-    version: params.version,
-    snapshot: params.snapshot,
-    createdBy: params.createdBy,
-    approvedBy: params.approvedBy,
-    approvedAt: params.approvedAt,
-    supersededAt: new Date(),
-  });
+export async function snapshotSpecVersion(params: SnapshotSpecVersionParams, session?: ClientSession) {
+  await ContentVersionModel.create(
+    [
+      {
+        parentType: "Specification",
+        parentId: params.specificationId,
+        version: params.version,
+        snapshot: params.snapshot,
+        createdBy: params.createdBy,
+        approvedBy: params.approvedBy,
+        approvedAt: params.approvedAt,
+        supersededAt: new Date(),
+      },
+    ],
+    { session },
+  );
 }
 
 function serializeVersion(doc: {

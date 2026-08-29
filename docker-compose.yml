@@ -8,10 +8,15 @@ services:
   mongo:
     image: mongo:7
     restart: unless-stopped
+    # Single-node replica set — required for multi-document transactions,
+    # which don't exist on a standalone mongod. The healthcheck doubles as
+    # one-time initiation: rs.initiate() only succeeds once, so subsequent
+    # checks just fall through to the ping.
+    command: ["--replSet", "rs0", "--bind_ip_all"]
     volumes:
       - mongo_data:/data/db
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: ["CMD", "mongosh", "--quiet", "--eval", "try { rs.status().ok } catch (e) { rs.initiate() }; db.adminCommand('ping').ok"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -31,12 +36,14 @@ services:
       - WEB_ORIGIN=${WEB_ORIGIN}
       - GENERATOR_WEB_ORIGIN=${GENERATOR_WEB_ORIGIN}
       - GENERATED_APPS_DIR=/app/data/generated-apps
-      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/bismo}
+      - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/bismo?replicaSet=rs0}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
       - JWT_INVITE_SECRET=${JWT_INVITE_SECRET}
       - PII_ENCRYPTION_KEY=${PII_ENCRYPTION_KEY}
       - EMAIL_HASH_SECRET=${EMAIL_HASH_SECRET}
+      - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
+      - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
     volumes:
       - generated_apps_data:/app/data/generated-apps
     expose:

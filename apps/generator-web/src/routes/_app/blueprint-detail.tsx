@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
-import { Button, Card, CardDescription, CardTitle, FormField, Input, Select, StatusBadge } from "@bismo/ui";
+import { Button, Card, CardDescription, CardTitle, FormField, Input, Select, StatusBadge, Textarea } from "@bismo/ui";
 import type { DatabaseChoice } from "@bismo/shared-schemas";
 import { appLayoutRoute } from "../AppLayout";
 import { useCatalogBlueprint } from "@/features/catalog/queries";
@@ -20,6 +20,7 @@ function BlueprintDetailPage() {
 
   const [database, setDatabase] = useState<DatabaseChoice>("mongodb");
   const [frontendFramework, setFrontendFramework] = useState("");
+  const [prompt, setPrompt] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
 
   if (isLoading) return <p className="text-sm text-[var(--bismo-text-muted)]">Loading…</p>;
@@ -32,6 +33,7 @@ function BlueprintDetailPage() {
         blueprintId: blueprint.id,
         database,
         frontendFramework: frontendFramework.trim() || undefined,
+        prompt: prompt.trim() || undefined,
       });
       navigate({ to: "/my-apps/$id", params: { id: app.id } });
     } catch (err) {
@@ -76,6 +78,18 @@ function BlueprintDetailPage() {
             placeholder="React + Vite + TanStack Query"
             value={frontendFramework}
             onChange={(e) => setFrontendFramework(e.target.value)}
+          />
+        </FormField>
+        <FormField
+          label="Anything specific you want? (optional)"
+          htmlFor="prompt"
+          className="sm:col-span-2"
+        >
+          <Textarea
+            id="prompt"
+            placeholder="e.g. focus the initial scaffold on the approval workflow, or use a specific auth approach…"
+            value={prompt}
+            onChange={(e) => setPrompt(e.target.value)}
           />
         </FormField>
         {serverError && <p className="text-sm text-[var(--bismo-status-rejected)]">{serverError}</p>}
