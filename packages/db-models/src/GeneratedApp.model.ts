@@ -20,11 +20,20 @@ const generatedAppSchema = new Schema(
     // the generation prompt alongside the blueprint's specs.
     initialPrompt: { type: String, default: "" },
     // "working" also guards against two chat turns mutating the same
-    // working tree at once, once the chat-driven iteration milestone lands.
-    status: { type: String, enum: ["idle", "working", "failed"], required: true, default: "idle" },
+    // working tree at once. "awaiting_approval" is Plan mode paused on a
+    // proposed plan, waiting for the user's Approve/Request-changes call.
+    status: {
+      type: String,
+      enum: ["idle", "working", "failed", "awaiting_approval"],
+      required: true,
+      default: "idle",
+    },
     // Populated only when status is "failed" — the agent's error, shown to
     // the user so a stuck generation isn't a silent dead end.
     lastError: { type: String, default: null },
+    // Populated only when status is "awaiting_approval" — the Plan-mode
+    // proposal text shown to the user for approval.
+    pendingPlan: { type: String, default: null },
   },
   { timestamps: true },
 );

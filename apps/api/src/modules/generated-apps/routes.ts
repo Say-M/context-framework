@@ -7,12 +7,14 @@ import {
   generatedAppSchema,
   generatedAppVersionSchema,
   objectIdSchema,
+  planDecisionSchema,
   sendChatMessageSchema,
 } from "@bismo/shared-schemas";
 import { authenticatePlatformUser, type PlatformAppVariables } from "../../middleware/platformAuth";
 import { listResponseSchema, okResponseSchema } from "../../lib/openapi-responses";
 import {
   createGeneratedApp,
+  decidePlan,
   deleteGeneratedApp,
   downloadVersion,
   getGeneratedApp,
@@ -188,6 +190,31 @@ generatedAppRoutes.post(
     const platformUser = c.get("platformUser");
     const message = await sendChatMessage(id, content, mode, platformUser.id);
     return c.json(message, 201);
+  },
+);
+
+generatedAppRoutes.post(
+  "/:id/plan/decision",
+  describeRoute({
+    tags,
+    summary: "Approve or request changes on a Plan-mode proposal",
+    description: "Resolves the paused agent turn. Rejected with 409 if no plan is currently awaiting approval.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Decision recorded",
+        content: { "application/json": { schema: resolver(okResponseSchema) } },
+      },
+    },
+  }),
+  zValidator("param", idParamSchema),
+  zValidator("json", planDecisionSchema),
+  async (c) => {
+    const { id } = c.req.valid("param");
+    const { decision, feedback } = c.req.valid("json");
+    const platformUser = c.get("platformUser");
+    await decidePlan(id, decision, feedback, platformUser.id);
+    return c.json({ ok: true });
   },
 );
 

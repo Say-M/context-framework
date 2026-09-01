@@ -2,19 +2,30 @@ import { useEffect, useRef, useState } from "react";
 import { Loader2, Send } from "lucide-react";
 import { Button, Textarea, cn } from "@bismo/ui";
 import type { ChatMode, GeneratedApp } from "@bismo/shared-schemas";
-import { useChatMessages, useGenerationStream, useSendChatMessage } from "../queries";
+import { useChatMessages, useDecidePlan, useGenerationStream, useSendChatMessage } from "../queries";
 
 const MODES: { value: ChatMode; label: string }[] = [
   { value: "build", label: "Build" },
   { value: "ask", label: "Ask" },
+  { value: "plan", label: "Plan" },
 ];
 
-export function ChatPanel({ generatedAppId, status }: { generatedAppId: string; status: GeneratedApp["status"] }) {
+export function ChatPanel({
+  generatedAppId,
+  status,
+  pendingPlan,
+}: {
+  generatedAppId: string;
+  status: GeneratedApp["status"];
+  pendingPlan: string | null;
+}) {
   const { data: messages, isLoading } = useChatMessages(generatedAppId);
-  const progressLog = useGenerationStream(generatedAppId, status === "working");
+  const progressLog = useGenerationStream(generatedAppId, status === "working" || status === "awaiting_approval");
   const sendMessage = useSendChatMessage(generatedAppId);
+  const decidePlan = useDecidePlan(generatedAppId);
   const [draft, setDraft] = useState("");
   const [mode, setMode] = useState<ChatMode>("build");
+  const [planFeedback, setPlanFeedback] = useState("");
 
   const bottomRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -37,6 +48,7 @@ export function ChatPanel({ generatedAppId, status }: { generatedAppId: string; 
         {!isLoading && messages?.items.length === 0 && status === "idle" && (
           <p className="text-sm text-[var(--bismo-text-muted)]">
             Build mode makes changes and creates a new version. Ask mode just answers — it never touches a file.
+            Plan mode proposes a plan first and waits for your approval before touching anything.
           </p>
         )}
         {messages?.items.map((message) => (
@@ -62,12 +74,49 @@ export function ChatPanel({ generatedAppId, status }: { generatedAppId: string; 
           </div>
         ))}
 
-        {status === "working" && (
-          <div className="flex flex-col gap-1.5 self-start">
-            <div className="flex items-center gap-2 text-sm text-[var(--bismo-text-muted)]">
-              <Loader2 size={14} strokeWidth={2} className="animate-spin text-[var(--bismo-accent-blueprint)]" />
-              Working…
+        {status === "awaiting_approval" && pendingPlan && (
+          <div className="flex flex-col gap-2 self-start rounded-lg border border-[var(--bismo-accent-blueprint)]/40 bg-[var(--bismo-accent-blueprint)]/5 p-3">
+            <p className="text-xs font-semibold uppercase tracking-wide text-[var(--bismo-accent-blueprint)]">
+              Proposed plan
+            </p>
+            <p className="whitespace-pre-wrap text-sm text-[var(--bismo-text)]">{pendingPlan}</p>
+            <Textarea
+              value={planFeedback}
+              onChange={(e) => setPlanFeedback(e.target.value)}
+              placeholder="Optional: tell it what to change instead of approving…"
+              className="min-h-0"
+            />
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                disabled={decidePlan.isPending}
+                onClick={() => decidePlan.mutate({ decision: "approve" })}
+              >
+                Approve &amp; Build
+              </Button>
+              <Button
+                variant="secondary"
+                size="sm"
+                disabled={decidePlan.isPending}
+                onClick={() => {
+                  decidePlan.mutate({ decision: "reject", feedback: planFeedback.trim() || undefined });
+                  setPlanFeedback("");
+                }}
+              >
+                Request Changes
+              </Button>
             </div>
+          </div>
+        )}
+
+        {(status === "working" || status === "awaiting_approval") && (
+          <div className="flex flex-col gap-1.5 self-start">
+            {status === "working" && (
+              <div className="flex items-center gap-2 text-sm text-[var(--bismo-text-muted)]">
+                <Loader2 size={14} strokeWidth={2} className="animate-spin text-[var(--bismo-accent-blueprint)]" />
+                Working…
+              </div>
+            )}
             {progressLog.map((event, index) =>
               event.type === "tool_use" ? (
                 <p key={index} className="font-mono text-xs text-[var(--bismo-accent-blueprint)]">
@@ -113,11 +162,15 @@ export function ChatPanel({ generatedAppId, status }: { generatedAppId: string; 
             }
           }}
           placeholder={
-            status !== "idle"
-              ? "Wait for the current turn to finish…"
-              : mode === "ask"
-                ? "Ask a question about this app…"
-                : "Ask for a change…"
+            status === "awaiting_approval"
+              ? "Respond to the plan above first…"
+              : status !== "idle"
+                ? "Wait for the current turn to finish…"
+                : mode === "ask"
+                  ? "Ask a question about this app…"
+                  : mode === "plan"
+                    ? "Describe the change you want a plan for…"
+                    : "Ask for a change…"
           }
           disabled={status !== "idle"}
           className="min-h-0 flex-1"

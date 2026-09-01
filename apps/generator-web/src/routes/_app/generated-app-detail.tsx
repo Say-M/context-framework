@@ -19,7 +19,7 @@ function GeneratedAppDetailPage() {
   const navigate = useNavigate();
   const { data: app, isLoading: isLoadingApp } = useGeneratedApp(id);
   const { data: versions, isLoading: isLoadingVersions } = useGeneratedAppVersions(id, app?.status);
-  const progressLog = useGenerationStream(id, app?.status === "working");
+  const progressLog = useGenerationStream(id, app?.status === "working" || app?.status === "awaiting_approval");
   const deleteGeneratedApp = useDeleteGeneratedApp();
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [tab, setTab] = useState<Tab>("versions");
@@ -40,7 +40,7 @@ function GeneratedAppDetailPage() {
             Every version is a git commit — download any of them as a zip.
           </p>
         </div>
-        {app && app.status !== "working" && (
+        {app && app.status !== "working" && app.status !== "awaiting_approval" && (
           <Button variant="secondary" size="sm" onClick={() => setConfirmingDelete(true)}>
             <Trash2 size={14} strokeWidth={1.75} />
             Delete
@@ -81,12 +81,14 @@ function GeneratedAppDetailPage() {
 
       {tab === "versions" && (
         <>
-          {app?.status === "working" && (
+          {(app?.status === "working" || app?.status === "awaiting_approval") && (
             <div className="flex flex-col gap-3">
               <div className="flex items-center gap-3 rounded-md border border-[var(--bismo-border)] p-4">
                 <Loader2 size={18} strokeWidth={2} className="animate-spin text-[var(--bismo-accent-blueprint)]" />
                 <p className="text-sm text-[var(--bismo-text)]">
-                  Generating your application… this can take a few minutes.
+                  {app.status === "awaiting_approval"
+                    ? "Waiting for your review — check the Chat tab to approve or request changes."
+                    : "Generating your application… this can take a few minutes."}
                 </p>
               </div>
               <div className="max-h-80 overflow-y-auto rounded-md border border-[var(--bismo-border)] bg-[var(--bismo-bg)] p-3 font-mono text-xs">
@@ -142,7 +144,9 @@ function GeneratedAppDetailPage() {
         </>
       )}
 
-      {tab === "chat" && app && <ChatPanel generatedAppId={id} status={app.status} />}
+      {tab === "chat" && app && (
+        <ChatPanel generatedAppId={id} status={app.status} pendingPlan={app.pendingPlan} />
+      )}
 
       <ConfirmDialog
         open={confirmingDelete}

@@ -7,6 +7,7 @@ import { verifyPlatformAccessToken } from "./jwt";
 export type ProgressEvent =
   | { type: "assistant_text"; text: string }
   | { type: "tool_use"; tool: string; summary: string }
+  | { type: "plan_proposed"; plan: string }
   | { type: "done"; status: "idle" | "failed"; lastError: string | null };
 
 interface SocketData {

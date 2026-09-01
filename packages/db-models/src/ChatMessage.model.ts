@@ -13,9 +13,9 @@ import {
 const chatMessageSchema = new Schema(
   {
     generatedAppId: { type: Schema.Types.ObjectId, ref: "GeneratedApp", required: true },
-    // Stored per-message (not just on the app) so Plan mode — not
-    // implemented yet — doesn't need a schema migration when it lands.
-    mode: { type: String, enum: ["build", "ask"], required: true, default: "build" },
+    // Stored per-message, not just on the app, since each message in a
+    // conversation can in principle have been sent in a different mode.
+    mode: { type: String, enum: ["build", "ask", "plan"], required: true, default: "build" },
     role: { type: String, enum: ["user", "assistant"], required: true },
     content: { type: String, required: true },
     // Set on an assistant message that produced a new version.

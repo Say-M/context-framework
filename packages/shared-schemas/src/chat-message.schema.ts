@@ -1,9 +1,7 @@
 import { z } from "zod";
 import { objectIdSchema } from "./common.schema";
 
-// "plan" isn't implemented yet, but the field already lives on every stored
-// message so it won't need a migration when it lands.
-export const chatModeSchema = z.enum(["build", "ask"]);
+export const chatModeSchema = z.enum(["build", "ask", "plan"]);
 export type ChatMode = z.infer<typeof chatModeSchema>;
 
 export const sendChatMessageSchema = z.object({
@@ -11,6 +9,12 @@ export const sendChatMessageSchema = z.object({
   mode: chatModeSchema.default("build"),
 });
 export type SendChatMessageInput = z.infer<typeof sendChatMessageSchema>;
+
+export const planDecisionSchema = z.object({
+  decision: z.enum(["approve", "reject"]),
+  feedback: z.string().trim().max(2000).optional(),
+});
+export type PlanDecisionInput = z.infer<typeof planDecisionSchema>;
 
 export const chatMessageRoleSchema = z.enum(["user", "assistant"]);
 export type ChatMessageRole = z.infer<typeof chatMessageRoleSchema>;

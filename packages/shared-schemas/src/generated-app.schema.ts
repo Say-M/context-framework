@@ -12,7 +12,7 @@ export const createGeneratedAppSchema = z.object({
 });
 export type CreateGeneratedAppInput = z.infer<typeof createGeneratedAppSchema>;
 
-export const generatedAppStatusSchema = z.enum(["idle", "working", "failed"]);
+export const generatedAppStatusSchema = z.enum(["idle", "working", "failed", "awaiting_approval"]);
 export type GeneratedAppStatus = z.infer<typeof generatedAppStatusSchema>;
 
 export const generatedAppSchema = z.object({
@@ -24,6 +24,9 @@ export const generatedAppSchema = z.object({
   initialPrompt: z.string(),
   status: generatedAppStatusSchema,
   lastError: z.string().nullable(),
+  // Populated only while status is "awaiting_approval" — the Plan-mode
+  // proposal waiting on the user's Approve/Request-changes decision.
+  pendingPlan: z.string().nullable(),
   createdBy: objectIdSchema,
   createdAt: z.string().datetime(),
   updatedAt: z.string().datetime(),

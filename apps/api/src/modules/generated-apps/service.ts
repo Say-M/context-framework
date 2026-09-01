@@ -12,6 +12,7 @@ import type { ChatMode, CreateGeneratedAppInput } from "@bismo/shared-schemas";
 import { archiveCommitToBuffer, listCommits, repoDir } from "../../lib/gitRepo";
 import { runGeneration } from "../../lib/generation";
 import { runChatTurn } from "../../lib/chat";
+import { resolveApproval } from "../../lib/planApprovals";
 import { withTransaction } from "../../config/db";
 
 export async function serializeGeneratedApp(doc: GeneratedAppDocument) {
@@ -25,6 +26,7 @@ export async function serializeGeneratedApp(doc: GeneratedAppDocument) {
     initialPrompt: doc.initialPrompt,
     status: doc.status,
     lastError: doc.lastError,
+    pendingPlan: doc.pendingPlan,
     createdBy: String(doc.createdBy),
     createdAt: doc.createdAt.toISOString(),
     updatedAt: doc.updatedAt.toISOString(),
@@ -119,7 +121,7 @@ export async function downloadVersion(id: string, sha: string, platformUserId: s
 
 export async function deleteGeneratedApp(id: string, platformUserId: string) {
   const doc = await getGeneratedApp(id, platformUserId);
-  if (doc.status === "working") {
+  if (doc.status === "working" || doc.status === "awaiting_approval") {
     throw new HTTPException(409, { message: "Can't delete an app while it's still generating" });
   }
   // Without a transaction, a crash between these two deletes leaves orphaned
@@ -177,4 +179,29 @@ export async function sendChatMessage(id: string, content: string, mode: ChatMod
   });
 
   return serializeChatMessage(userMessage);
+}
+
+export async function decidePlan(
+  id: string,
+  decision: "approve" | "reject",
+  feedback: string | undefined,
+  platformUserId: string,
+) {
+  const doc = await getGeneratedApp(id, platformUserId);
+  if (doc.status !== "awaiting_approval") {
+    throw new HTTPException(409, { message: "No plan is currently awaiting approval." });
+  }
+
+  const resolved = resolveApproval(id, { approved: decision === "approve", feedback });
+  if (!resolved) {
+    // The in-memory pending approval is gone — almost certainly the API
+    // process restarted mid-review (the dev server's --watch does this on
+    // every save). The paused agent run is gone with it, so self-heal back
+    // to idle instead of leaving the UI stuck on "awaiting_approval"
+    // forever with no way to resolve it.
+    await GeneratedAppModel.updateOne({ _id: id }, { $set: { status: "idle", pendingPlan: null } });
+    throw new HTTPException(409, {
+      message: "This plan is no longer active (the server may have restarted) — send a new message to try again.",
+    });
+  }
 }

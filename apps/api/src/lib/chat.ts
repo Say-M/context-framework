@@ -2,7 +2,9 @@ import { ChatMessageModel, GeneratedAppModel, type ChatMessageDocument } from "@
 import type { ChatMode } from "@bismo/shared-schemas";
 import { commitWorkingTree, repoDir } from "./gitRepo";
 import { publish } from "./socket";
-import { BUILD_TOOLS, READ_ONLY_TOOLS, runAgentQuery } from "./agentRun";
+import { BUILD_TOOLS, PLAN_TOOLS, READ_ONLY_TOOLS, runAgentQuery } from "./agentRun";
+import { awaitApproval } from "./planApprovals";
+import { injectDashboard } from "./dashboardScaffold";
 
 const HISTORY_LIMIT = 20;
 
@@ -15,7 +17,10 @@ function buildChatPrompt(mode: ChatMode, history: ChatMessageDocument[], newMess
     mode === "ask"
       ? `# Your task
 Answer the user's question about this application — you are read-only in this mode. Explore the repo (Glob/Read/Grep) as needed to give a specific, accurate answer grounded in what's actually there, not a guess. Do not propose it as something you're about to do — you have no Write/Edit tools available at all, so just explain.`
-      : `# Your task
+      : mode === "plan"
+        ? `# Your task
+Explore this repo (Glob/Read/Grep) to understand it, then propose a concrete plan for the requested change by calling the ExitPlanMode tool — do not write or edit any files yourself, that only happens after the user approves your plan. Be specific about which files you'll touch and what will change in each. If the user requests changes to your plan instead of approving it, revise it and call ExitPlanMode again with the updated version.`
+        : `# Your task
 Make the requested change against this existing repo. Explore it first (Glob/Read) before editing; don't assume anything about its structure beyond what you actually find there. If the request doesn't actually require any file changes (e.g. it's phrased as a question), just answer it — don't invent changes to make.`;
 
   return `You are continuing work on an application that already exists — the current directory already contains real files.
@@ -32,10 +37,41 @@ ${newMessage}
 ${task}
 
 # Constraints
-- You have ${mode === "ask" ? "Read, Glob, and Grep" : "Read, Write, Edit, Glob, and Grep"} tools only — no shell access. You cannot run \`bun install\`, \`prisma generate\`, or any other command.
+- You have ${
+    mode === "ask"
+      ? "Read, Glob, and Grep"
+      : mode === "plan"
+        ? "Read, Glob, Grep, and ExitPlanMode (Write/Edit are unavailable until your plan is approved)"
+        : "Read, Write, Edit, Glob, and Grep"
+  } tools only — no shell access. You cannot run \`bun install\`, \`prisma generate\`, or any other command.
 - Do not initialize a git repository or attempt to commit — that happens outside your control after you finish.
 - Stay inside the current directory.
 `;
+}
+
+function buildAgentOptions(generatedAppId: string, mode: ChatMode) {
+  if (mode === "ask") return { tools: READ_ONLY_TOOLS };
+  if (mode !== "plan") return { tools: BUILD_TOOLS };
+
+  return {
+    tools: PLAN_TOOLS,
+    permissionMode: "plan" as const,
+    onPlanReady: async (plan: string) => {
+      await GeneratedAppModel.updateOne(
+        { _id: generatedAppId },
+        { $set: { status: "awaiting_approval", pendingPlan: plan } },
+      );
+      const decision = await awaitApproval(generatedAppId);
+      // Flips back to "working" the moment the human responds, whether
+      // approved (execution continues) or not (the agent revises) — the
+      // final `runChatTurn` completion below is what sets it to "idle".
+      await GeneratedAppModel.updateOne(
+        { _id: generatedAppId },
+        { $set: { status: "working", pendingPlan: null } },
+      );
+      return decision;
+    },
+  };
 }
 
 /**
@@ -53,7 +89,7 @@ async function markChatTurnFailed(generatedAppId: string, mode: ChatMode, messag
     content: message.slice(0, 2000),
     failed: true,
   });
-  await GeneratedAppModel.updateOne({ _id: generatedAppId }, { $set: { status: "idle" } });
+  await GeneratedAppModel.updateOne({ _id: generatedAppId }, { $set: { status: "idle", pendingPlan: null } });
   publish(generatedAppId, { type: "done", status: "idle", lastError: null });
 }
 
@@ -81,7 +117,16 @@ export async function runChatTurn(generatedAppId: string, userMessageId: string,
 
     const dir = repoDir(generatedAppId);
     const prompt = buildChatPrompt(mode, history, content);
-    const text = await runAgentQuery(generatedAppId, dir, prompt, mode === "ask" ? READ_ONLY_TOOLS : BUILD_TOOLS);
+    const text = await runAgentQuery(generatedAppId, dir, prompt, buildAgentOptions(generatedAppId, mode));
+
+    // Ask never touches the working tree, so there's nothing to (re-)wire.
+    // Additive, never a hard requirement — see the matching comment in
+    // generation.ts.
+    if (mode !== "ask") {
+      await injectDashboard(dir, generatedAppId).catch((err) => {
+        console.error(`[dashboardScaffold] ${generatedAppId}: injection failed:`, err);
+      });
+    }
 
     const commitSha = mode === "ask" ? null : await commitWorkingTree(dir, `Chat: ${content.slice(0, 72)}`);
 

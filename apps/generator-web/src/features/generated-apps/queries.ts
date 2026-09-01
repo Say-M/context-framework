@@ -13,6 +13,7 @@ import { getSocket } from "@/lib/socketClient";
 export type ProgressEvent =
   | { type: "assistant_text"; text: string }
   | { type: "tool_use"; tool: string; summary: string }
+  | { type: "plan_proposed"; plan: string }
   | { type: "done"; status: "idle" | "failed"; lastError: string | null };
 
 export const generatedAppKeys = {
@@ -23,9 +24,10 @@ export const generatedAppKeys = {
   messages: (id: string) => [...generatedAppKeys.all, "messages", id] as const,
 };
 
-/** Polls every 2s while the app is generating, stops once it settles. */
+/** Polls every 2s while the app is generating or awaiting a plan decision, stops once it settles. */
 function pollWhileWorking(query: { state: { data?: { status?: string } } }) {
-  return query.state.data?.status === "working" ? 2000 : false;
+  const status = query.state.data?.status;
+  return status === "working" || status === "awaiting_approval" ? 2000 : false;
 }
 
 export function useMyGeneratedApps() {
@@ -84,7 +86,7 @@ export function useGenerationStream(id: string | null, enabled: boolean) {
     const handleProgress = (payload: { generatedAppId: string; event: ProgressEvent }) => {
       if (payload.generatedAppId !== id) return;
       setLog((prev) => [...prev, payload.event]);
-      if (payload.event.type === "done") {
+      if (payload.event.type === "done" || payload.event.type === "plan_proposed") {
         queryClient.invalidateQueries({ queryKey: generatedAppKeys.all });
       }
     };
@@ -118,6 +120,18 @@ export function useSendChatMessage(id: string) {
       apiRequest<ChatMessage>(`/api/v1/generated-apps/${id}/messages`, {
         method: "POST",
         body: JSON.stringify({ content, mode }),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: generatedAppKeys.all }),
+  });
+}
+
+export function useDecidePlan(id: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: ({ decision, feedback }: { decision: "approve" | "reject"; feedback?: string }) =>
+      apiRequest(`/api/v1/generated-apps/${id}/plan/decision`, {
+        method: "POST",
+        body: JSON.stringify({ decision, feedback }),
       }),
     onSuccess: () => queryClient.invalidateQueries({ queryKey: generatedAppKeys.all }),
   });

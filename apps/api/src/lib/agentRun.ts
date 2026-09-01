@@ -1,12 +1,19 @@
-import { query } from "@anthropic-ai/claude-agent-sdk";
+import { query, type CanUseTool } from "@anthropic-ai/claude-agent-sdk";
 import { publish } from "./socket";
 
-const GENERATION_MODEL = "claude-sonnet-5";
-const MAX_TURNS = 40;
+const DEFAULT_MODEL = "claude-sonnet-5";
+const MAX_TURNS = 60;
 const TIMEOUT_MS = 10 * 60 * 1000;
 
 export const BUILD_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep"] as const;
 export const READ_ONLY_TOOLS = ["Read", "Glob", "Grep"] as const;
+// Plan mode explores like Ask, but needs Write/Edit available in its
+// toolset for once a plan is approved, plus the built-in ExitPlanMode tool
+// it uses to propose the plan — tools is an allow-list, so ExitPlanMode
+// has to be listed explicitly or the model can't call it at all.
+export const PLAN_TOOLS = [...BUILD_TOOLS, "ExitPlanMode"] as const;
+
+const MUTATING_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
 
 function summarizeToolUse(name: string, input: unknown): string {
   const record = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
@@ -27,6 +34,20 @@ function summarizeToolUse(name: string, input: unknown): string {
   }
 }
 
+export interface RunAgentQueryOptions {
+  tools?: readonly string[];
+  permissionMode?: "acceptEdits" | "plan";
+  model?: string;
+  /**
+   * Only meaningful with permissionMode "plan". Called when the agent
+   * proposes a plan via the built-in ExitPlanMode tool; resolve it with the
+   * user's real decision. While this is pending, the hard timeout below is
+   * disarmed — a human reading a plan shouldn't be racing the same clock
+   * that bounds autonomous agent work.
+   */
+  onPlanReady?: (plan: string) => Promise<{ approved: boolean; feedback?: string }>;
+}
+
 /**
  * Runs one agent turn scoped to `dir`, streaming progress to the
  * `generatedAppId` room via `publish()`, and resolves to the agent's final
@@ -34,29 +55,95 @@ function summarizeToolUse(name: string, input: unknown): string {
  * result at all, or the hard timeout — leaving it to the caller to decide
  * what "failed" means for its own record (the whole GeneratedApp for
  * initial generation, a single ChatMessage for a chat turn). Shared by
- * `generation.ts` (initial scaffold) and `chat.ts` (follow-up turns) —
- * same permissionMode/model/timeout for both, since a chat turn is exactly
- * the same kind of agent work, just against an existing repo. `tools`
- * varies by caller: Build gets the full read/write set, Ask is restricted
- * to `READ_ONLY_TOOLS` so it structurally cannot touch a file no matter
- * what the prompt says.
+ * `generation.ts` (initial scaffold) and `chat.ts` (follow-up turns).
+ * `tools`/`permissionMode` vary by caller: Build gets the full read/write
+ * set with `acceptEdits`, Ask is restricted to `READ_ONLY_TOOLS`, Plan gets
+ * `PLAN_TOOLS` with `permissionMode: "plan"` plus `onPlanReady`. `model`
+ * defaults to `DEFAULT_MODEL` but callers can override it per call (e.g.
+ * initial generation choosing a cheaper/faster model for a given run).
  */
 export async function runAgentQuery(
   generatedAppId: string,
   dir: string,
   prompt: string,
-  tools: readonly string[] = BUILD_TOOLS,
+  options: RunAgentQueryOptions = {},
 ): Promise<string> {
+  const { tools = BUILD_TOOLS, permissionMode = "acceptEdits", model = DEFAULT_MODEL, onPlanReady } = options;
   const abortController = new AbortController();
+
+  // Two timers, armed/disarmed together: `timeout` asks the SDK to abort
+  // gracefully at TIMEOUT_MS; `hardTimer` is the fallback that force-ends
+  // the race below 5s later, since abortController alone isn't a hard
+  // guarantee. Both are cleared while a plan-mode canUseTool pause is
+  // awaiting a human decision, and re-armed with a fresh TIMEOUT_MS budget
+  // once it resolves — `resolveTimedOut` stays the same function across
+  // every arm/disarm cycle, so `timedOutPromise` itself never needs to be
+  // recreated, just whether anything is still scheduled to call it.
+  const timedOut = Symbol("timed-out");
+  let resolveTimedOut!: (value: typeof timedOut) => void;
+  const timedOutPromise = new Promise<typeof timedOut>((resolve) => {
+    resolveTimedOut = resolve;
+  });
+  let timeout: ReturnType<typeof setTimeout> | undefined;
+  let hardTimer: ReturnType<typeof setTimeout> | undefined;
+  const armTimeout = () => {
+    timeout = setTimeout(() => abortController.abort(), TIMEOUT_MS);
+    hardTimer = setTimeout(() => resolveTimedOut(timedOut), TIMEOUT_MS + 5000);
+  };
+  const disarmTimeout = () => {
+    clearTimeout(timeout);
+    clearTimeout(hardTimer);
+  };
+
+  // Plan mode's own read-only-until-approved contract is enforced twice:
+  // permissionMode "plan" itself, plus this explicit denial of any
+  // mutating tool before onPlanReady has resolved approved — so
+  // correctness here doesn't depend on exactly how the CLI enforces the
+  // mode internally.
+  let planApproved = false;
+  const canUseTool: CanUseTool | undefined = onPlanReady
+    ? async (toolName, input) => {
+        if (toolName === "ExitPlanMode") {
+          const plan = typeof input.plan === "string" ? input.plan : "";
+          disarmTimeout();
+          try {
+            const decision = await onPlanReady(plan);
+            if (decision.approved) {
+              planApproved = true;
+              return {
+                behavior: "allow",
+                updatedInput: input,
+                updatedPermissions: [{ type: "setMode", mode: "acceptEdits", destination: "session" }],
+              };
+            }
+            return {
+              behavior: "deny",
+              message: decision.feedback || "Plan rejected — please revise and propose again.",
+            };
+          } finally {
+            armTimeout();
+          }
+        }
+        if (!planApproved && MUTATING_TOOLS.has(toolName)) {
+          return {
+            behavior: "deny",
+            message: "Still in planning mode — call ExitPlanMode with your plan before making changes.",
+          };
+        }
+        return { behavior: "allow", updatedInput: input };
+      }
+    : undefined;
+
   const stream = query({
     prompt,
     options: {
       cwd: dir,
       tools: [...tools],
-      permissionMode: "acceptEdits",
-      model: GENERATION_MODEL,
+      permissionMode,
+      model,
       maxTurns: MAX_TURNS,
       abortController,
+      ...(canUseTool ? { canUseTool } : {}),
     },
   });
 
@@ -73,11 +160,18 @@ export async function runAgentQuery(
           if (block.type === "text" && block.text.trim()) {
             publish(generatedAppId, { type: "assistant_text", text: block.text });
           } else if (block.type === "tool_use") {
-            publish(generatedAppId, {
-              type: "tool_use",
-              tool: block.name,
-              summary: summarizeToolUse(block.name, block.input),
-            });
+            if (block.name === "ExitPlanMode") {
+              const plan = typeof block.input === "object" && block.input && "plan" in block.input
+                ? String((block.input as Record<string, unknown>).plan ?? "")
+                : "";
+              publish(generatedAppId, { type: "plan_proposed", plan });
+            } else {
+              publish(generatedAppId, {
+                type: "tool_use",
+                tool: block.name,
+                summary: summarizeToolUse(block.name, block.input),
+              });
+            }
           }
         }
       }
@@ -97,14 +191,10 @@ export async function runAgentQuery(
   // rejection whenever it eventually settles.
   consume.catch(() => {});
 
-  const timedOut = Symbol("timed-out");
-  const timeout = setTimeout(() => abortController.abort(), TIMEOUT_MS);
+  armTimeout();
   let finalMessage: FinalMessage | null;
   try {
-    finalMessage = await Promise.race([
-      consume,
-      new Promise<typeof timedOut>((resolve) => setTimeout(() => resolve(timedOut), TIMEOUT_MS + 5000)),
-    ]).then((result) => {
+    finalMessage = await Promise.race([consume, timedOutPromise]).then((result) => {
       if (result === timedOut) {
         void stream.return?.(undefined).catch(() => {});
         throw new Error(`Generation timed out after ${TIMEOUT_MS / 60000} minutes.`);
@@ -112,7 +202,7 @@ export async function runAgentQuery(
       return result;
     });
   } finally {
-    clearTimeout(timeout);
+    disarmTimeout();
   }
 
   if (!finalMessage) {

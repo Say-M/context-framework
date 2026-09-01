@@ -5,6 +5,7 @@ import { commitWorkingTree, repoDir } from "./gitRepo";
 import { buildBlueprintBundle } from "../modules/generated-apps/service";
 import { publish } from "./socket";
 import { runAgentQuery } from "./agentRun";
+import { injectDashboard } from "./dashboardScaffold";
 
 function buildGenerationPrompt(
   blueprint: AppBlueprintDocument,
@@ -32,7 +33,7 @@ Description: ${blueprint.description || "(none provided)"}
 # Your task
 Produce a buildable initial scaffold of this application based on the specifications below:
 - A Prisma schema modeling every "Entity" spec as a model.
-- Hono routes providing basic CRUD for each entity.
+- Hono routes providing basic CRUD for each entity. Mount each entity's router at \`/api/<path>\`, where \`<path>\` is the model name kebab-cased and then suffixed with "s" unless it already ends in one (e.g. \`FiscalPeriod\` → \`/api/fiscal-periods\`, \`Address\` → \`/api/address\`) — mechanical, not grammatical, so it stays unambiguous. This exact convention is required, not just a suggestion: a separately-injected admin dashboard derives each entity's API path from its Prisma model name using this same rule, and depends on the two never disagreeing.
 - A minimal frontend with list/detail pages for each entity, wired to the backend via the frontend's data-fetching layer.
 - A README explaining what was generated and its current limitations.
 - Valid package.json/tsconfig files for both backend and frontend so the result is structurally buildable.
@@ -81,7 +82,13 @@ export async function runGeneration(generatedAppId: string) {
       userPrompt: doc.initialPrompt,
     });
 
-    await runAgentQuery(generatedAppId, dir, prompt);
+    await runAgentQuery(generatedAppId, dir, prompt, { model: "claude-haiku-4-5-20251001" });
+    // Additive, never a hard requirement — a real generation failure would
+    // be far more disruptive than a missing dashboard, so this is only
+    // ever logged, never allowed to fail the whole run.
+    await injectDashboard(dir, generatedAppId).catch((err) => {
+      console.error(`[dashboardScaffold] ${generatedAppId}: injection failed:`, err);
+    });
     await commitWorkingTree(dir, "Initial generation");
 
     await GeneratedAppModel.updateOne(
