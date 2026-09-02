@@ -1,4 +1,4 @@
-import { query, type CanUseTool } from "@anthropic-ai/claude-agent-sdk";
+import { query, type CanUseTool, type McpServerConfig } from "@anthropic-ai/claude-agent-sdk";
 import { publish } from "./socket";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
@@ -19,6 +19,8 @@ function summarizeToolUse(name: string, input: unknown): string {
   const record = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
   const filePath = typeof record.file_path === "string" ? record.file_path : undefined;
   const pattern = typeof record.pattern === "string" ? record.pattern : undefined;
+  const query = typeof record.query === "string" ? record.query : undefined;
+  const url = typeof record.url === "string" ? record.url : undefined;
   switch (name) {
     case "Write":
       return filePath ? `Writing ${filePath}` : "Writing a file";
@@ -29,6 +31,10 @@ function summarizeToolUse(name: string, input: unknown): string {
     case "Glob":
     case "Grep":
       return pattern ? `Searching for "${pattern}"` : `Using ${name}`;
+    case "WebSearch":
+      return query ? `Searching the web for "${query}"` : "Searching the web";
+    case "WebFetch":
+      return url ? `Reading ${url}` : "Fetching a web page";
     default:
       return `Using ${name}`;
   }
@@ -38,6 +44,22 @@ export interface RunAgentQueryOptions {
   tools?: readonly string[];
   permissionMode?: "acceptEdits" | "plan";
   model?: string;
+  /**
+   * Custom in-process tools (e.g. from `createSdkMcpServer`) the model can
+   * call in addition to `tools`. Each tool's fully-qualified name
+   * (`mcp__<server>__<tool>`) still has to be listed in `tools` too, or the
+   * model can't call it — same allow-list rule `ExitPlanMode` follows.
+   */
+  mcpServers?: Record<string, McpServerConfig>;
+  /**
+   * Tool names auto-allowed without a permission prompt. `permissionMode:
+   * "acceptEdits"` only covers file-edit operations (Write/Edit/
+   * NotebookEdit) — custom MCP tools are NOT auto-approved by it and need
+   * to be listed here explicitly, or the model's tool call is silently
+   * denied and it falls back to describing what it would have done in
+   * plain text instead.
+   */
+  allowedTools?: readonly string[];
   /**
    * Only meaningful with permissionMode "plan". Called when the agent
    * proposes a plan via the built-in ExitPlanMode tool; resolve it with the
@@ -61,6 +83,9 @@ export interface RunAgentQueryOptions {
  * `PLAN_TOOLS` with `permissionMode: "plan"` plus `onPlanReady`. `model`
  * defaults to `DEFAULT_MODEL` but callers can override it per call (e.g.
  * initial generation choosing a cheaper/faster model for a given run).
+ * Also reused by `studioAgent.ts`'s chat turns via `mcpServers` — despite
+ * the parameter name, `generatedAppId` is really just "the room id to
+ * publish progress to," generic enough that Studio passes a `threadId`.
  */
 export async function runAgentQuery(
   generatedAppId: string,
@@ -68,7 +93,14 @@ export async function runAgentQuery(
   prompt: string,
   options: RunAgentQueryOptions = {},
 ): Promise<string> {
-  const { tools = BUILD_TOOLS, permissionMode = "acceptEdits", model = DEFAULT_MODEL, onPlanReady } = options;
+  const {
+    tools = BUILD_TOOLS,
+    permissionMode = "acceptEdits",
+    model = DEFAULT_MODEL,
+    mcpServers,
+    allowedTools,
+    onPlanReady,
+  } = options;
   const abortController = new AbortController();
 
   // Two timers, armed/disarmed together: `timeout` asks the SDK to abort
@@ -144,6 +176,8 @@ export async function runAgentQuery(
       maxTurns: MAX_TURNS,
       abortController,
       ...(canUseTool ? { canUseTool } : {}),
+      ...(mcpServers ? { mcpServers } : {}),
+      ...(allowedTools ? { allowedTools: [...allowedTools] } : {}),
     },
   });
 

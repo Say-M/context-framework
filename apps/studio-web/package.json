@@ -1,0 +1,44 @@
+{
+  "name": "@bismo/studio-web",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "check-types": "tsc --noEmit",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@bismo/shared-schemas": "workspace:*",
+    "@bismo/ui": "workspace:*",
+    "@hookform/resolvers": "^3.9.1",
+    "@tanstack/react-query": "^5.64.2",
+    "@tanstack/react-router": "^1.97.1",
+    "@univerjs/preset-docs-core": "0.25.1",
+    "@univerjs/preset-sheets-core": "^0.25.1",
+    "@univerjs/presets": "^0.25.1",
+    "docx": "9.7.1",
+    "exceljs": "^4.4.0",
+    "konva": "10.3.2",
+    "lucide-react": "^1.37.0",
+    "pptxgenjs": "^4.0.1",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "react-hook-form": "^7.54.2",
+    "react-konva": "19.2.5",
+    "reveal.js": "^6.0.1",
+    "socket.io-client": "^4.8.3",
+    "zod": "^3.24.1"
+  },
+  "devDependencies": {
+    "@bismo/config-typescript": "workspace:*",
+    "@tailwindcss/vite": "^4.0.0",
+    "@types/react": "^19.0.7",
+    "@types/react-dom": "^19.0.3",
+    "@vitejs/plugin-react": "^4.3.4",
+    "tailwindcss": "^4.0.0",
+    "typescript": "^5.7.3",
+    "vite": "^6.0.7"
+  }
+}

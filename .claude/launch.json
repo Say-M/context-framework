@@ -33,6 +33,17 @@
         "dev"
       ],
       "port": 5500
+    },
+    {
+      "name": "studio-web",
+      "runtimeExecutable": "bun",
+      "runtimeArgs": [
+        "run",
+        "--cwd",
+        "apps/studio-web",
+        "dev"
+      ],
+      "port": 5175
     }
   ]
 }

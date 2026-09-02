@@ -35,7 +35,9 @@ services:
       - PORT=${PORT:-5500}
       - WEB_ORIGIN=${WEB_ORIGIN}
       - GENERATOR_WEB_ORIGIN=${GENERATOR_WEB_ORIGIN}
+      - STUDIO_WEB_ORIGIN=${STUDIO_WEB_ORIGIN}
       - GENERATED_APPS_DIR=/app/data/generated-apps
+      - STUDIO_ASSETS_DIR=/app/data/studio-assets
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/bismo?replicaSet=rs0}
       - JWT_ACCESS_SECRET=${JWT_ACCESS_SECRET}
       - JWT_REFRESH_SECRET=${JWT_REFRESH_SECRET}
@@ -44,8 +46,10 @@ services:
       - EMAIL_HASH_SECRET=${EMAIL_HASH_SECRET}
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     volumes:
       - generated_apps_data:/app/data/generated-apps
+      - studio_assets_data:/app/data/studio-assets
     expose:
       - "${PORT:-5500}"
 
@@ -85,6 +89,24 @@ services:
     ports:
       - "${GENERATOR_WEB_PORT:-8081}:80"
 
+  studio-web:
+    build:
+      context: .
+      dockerfile: apps/studio-web/Dockerfile
+      target: production
+      args:
+        - VITE_API_URL=${VITE_API_URL:-}
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      - API_HOST=api
+      - API_PORT=${PORT:-5500}
+      - WEB_INTERNAL_PORT=80
+    ports:
+      - "${STUDIO_WEB_PORT:-8082}:80"
+
 volumes:
   mongo_data:
   generated_apps_data:
+  studio_assets_data:

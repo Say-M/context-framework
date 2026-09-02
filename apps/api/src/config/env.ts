@@ -33,7 +33,9 @@ const envSchema = z.object({
   PORT: z.coerce.number().int().positive().default(4000),
   WEB_ORIGIN: z.string().url(),
   GENERATOR_WEB_ORIGIN: z.string().url(),
+  STUDIO_WEB_ORIGIN: z.string().url(),
   GENERATED_APPS_DIR: z.string().min(1).default("./data/generated-apps"),
+  STUDIO_ASSETS_DIR: z.string().min(1).default("./data/studio-assets"),
   MONGODB_URI: z.string().min(1),
   JWT_ACCESS_SECRET: z.string().min(32),
   JWT_REFRESH_SECRET: z.string().min(32),
@@ -45,6 +47,11 @@ const envSchema = z.object({
   // routing through a compatible gateway instead of api.anthropic.com)
   // straight from its inherited process.env, not from this parsed object.
   ANTHROPIC_API_KEY: z.string().min(1),
+  // Optional, unlike ANTHROPIC_API_KEY — Studio's generate_image tool
+  // degrades gracefully (a normal tool-error result, not a boot crash) when
+  // this is unset, since image generation is one capability among several,
+  // not something the whole platform depends on.
+  GOOGLE_API_KEY: z.string().min(1).optional(),
 });
 
 // Parsed once at module load (first import, i.e. app boot) and never again —

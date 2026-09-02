@@ -51,6 +51,21 @@ export {
   type ChatMessageDocument,
   type ChatMessageAttrs,
 } from "./ChatMessage.model";
+export {
+  StudioThreadModel,
+  type StudioThreadDocument,
+  type StudioThreadAttrs,
+} from "./StudioThread.model";
+export {
+  StudioMessageModel,
+  type StudioMessageDocument,
+  type StudioMessageAttrs,
+} from "./StudioMessage.model";
+export {
+  StudioArtifactModel,
+  type StudioArtifactDocument,
+  type StudioArtifactAttrs,
+} from "./StudioArtifact.model";
 export { approvablePlugin, type ApprovableFields } from "./plugins/approvable.plugin";
 export { fieldEncryptionPlugin } from "./plugins/fieldEncryption.plugin";
 export {

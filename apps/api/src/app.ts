@@ -19,6 +19,7 @@ import { userRoutes } from "./modules/users/routes";
 import { platformAuthRoutes } from "./modules/platform-auth/routes";
 import { catalogRoutes } from "./modules/catalog/routes";
 import { generatedAppRoutes } from "./modules/generated-apps/routes";
+import { studioRoutes } from "./modules/studio/routes";
 import { engine } from "./lib/socket";
 import type { WebSocketData } from "@socket.io/bun-engine";
 
@@ -46,7 +47,7 @@ for (const path of GUARDED_PATHS) {
   app.use(
     path,
     cors({
-      origin: [env.WEB_ORIGIN, env.GENERATOR_WEB_ORIGIN],
+      origin: [env.WEB_ORIGIN, env.GENERATOR_WEB_ORIGIN, env.STUDIO_WEB_ORIGIN],
       credentials: true,
       allowMethods: ["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
       allowHeaders: ["Content-Type", "Authorization"],
@@ -72,6 +73,7 @@ app.route("/api/v1/users", userRoutes);
 app.route("/api/v1/platform-auth", platformAuthRoutes);
 app.route("/api/v1/catalog", catalogRoutes);
 app.route("/api/v1/generated-apps", generatedAppRoutes);
+app.route("/api/v1/studio", studioRoutes);
 
 app.get(
   "/api/v1/openapi.json",

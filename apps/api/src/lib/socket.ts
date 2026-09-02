@@ -1,6 +1,6 @@
 import { Server as Engine } from "@socket.io/bun-engine";
 import { Server } from "socket.io";
-import { GeneratedAppModel } from "@bismo/db-models";
+import { GeneratedAppModel, StudioThreadModel } from "@bismo/db-models";
 import { env } from "../config/env";
 import { verifyPlatformAccessToken } from "./jwt";
 
@@ -25,7 +25,10 @@ const backlogs = new Map<string, ProgressEvent[]>();
 const backlogTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 export const io = new Server<
-  { subscribe: (payload: { generatedAppId: string }) => void },
+  { subscribe: (payload: { generatedAppId?: string; studioThreadId?: string }) => void },
+  // The emitted field stays `generatedAppId` even for a Studio subscription
+  // (it just holds a threadId then) — this is really "the room id",
+  // unchanged to avoid touching generator-web's already-working consumer.
   { progress: (payload: { generatedAppId: string; event: ProgressEvent }) => void },
   Record<string, never>,
   SocketData
@@ -33,7 +36,7 @@ export const io = new Server<
 
 export const engine = new Engine({
   path: "/socket.io/",
-  cors: { origin: [env.GENERATOR_WEB_ORIGIN] },
+  cors: { origin: [env.GENERATOR_WEB_ORIGIN, env.STUDIO_WEB_ORIGIN] },
 });
 io.bind(engine);
 
@@ -58,13 +61,20 @@ io.use(async (socket, next) => {
 
 io.on("connection", (socket) => {
   socket.on("subscribe", async (payload) => {
-    const id = payload?.generatedAppId;
+    const id = payload?.generatedAppId ?? payload?.studioThreadId;
     if (typeof id !== "string") return;
 
-    // Same ownership rule as every other generated-apps endpoint — a
-    // platform user only ever sees their own generated apps.
-    const doc = await GeneratedAppModel.findById(id).select("createdBy");
-    if (!doc || String(doc.createdBy) !== socket.data.platformUserId) return;
+    // Same ownership rule as every other endpoint for the resource being
+    // subscribed to — a platform user only ever sees their own generated
+    // apps / Studio threads. Room ids (Mongo ObjectIds) are unique across
+    // collections, so a GeneratedApp id and a StudioThread id can never
+    // collide as the same room. Branched (not a shared `ownerModel`
+    // variable) because Mongoose's `findById` overloads don't unify across
+    // differently-typed models.
+    const createdBy = payload?.generatedAppId
+      ? (await GeneratedAppModel.findById(id).select("createdBy"))?.createdBy
+      : (await StudioThreadModel.findById(id).select("createdBy"))?.createdBy;
+    if (!createdBy || String(createdBy) !== socket.data.platformUserId) return;
 
     socket.join(id);
     for (const event of backlogs.get(id) ?? []) {

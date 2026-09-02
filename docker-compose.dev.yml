@@ -37,7 +37,9 @@ services:
       - PORT=${PORT:-5500}
       - WEB_ORIGIN=${WEB_ORIGIN:-http://localhost:5173}
       - GENERATOR_WEB_ORIGIN=${GENERATOR_WEB_ORIGIN:-http://localhost:5174}
+      - STUDIO_WEB_ORIGIN=${STUDIO_WEB_ORIGIN:-http://localhost:5175}
       - GENERATED_APPS_DIR=/app/data/generated-apps
+      - STUDIO_ASSETS_DIR=/app/data/studio-assets
       - MONGODB_URI=${MONGODB_URI:-mongodb://mongo:27017/bismo?replicaSet=rs0}
       # Dev-only fallbacks so this runs with zero setup — never used in
       # docker-compose.yml (production), which requires real values.
@@ -50,6 +52,9 @@ services:
       # without a real one, so this must come from the host's .env.
       - ANTHROPIC_API_KEY=${ANTHROPIC_API_KEY}
       - ANTHROPIC_BASE_URL=${ANTHROPIC_BASE_URL:-https://api.anthropic.com}
+      # Unset by default — Studio's generate_image tool degrades gracefully
+      # without it (see config/env.ts), so no dev-only fallback needed.
+      - GOOGLE_API_KEY=${GOOGLE_API_KEY:-}
     ports:
       - "${PORT:-5500}:${PORT:-5500}"
     volumes:
@@ -60,6 +65,7 @@ services:
       - ./packages/shared-schemas:/app/packages/shared-schemas
       - /app/packages/shared-schemas/node_modules
       - generated_apps_data_dev:/app/data/generated-apps
+      - studio_assets_data_dev:/app/data/studio-assets
 
   web:
     build:
@@ -111,6 +117,32 @@ services:
       - ./packages/ui:/app/packages/ui
       - /app/packages/ui/node_modules
 
+  studio-web:
+    build:
+      context: .
+      dockerfile: apps/studio-web/Dockerfile
+      target: dev
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # The browser runs on the host, not in the docker network, so it needs
+      # the API's host-published port/address, not the internal service name.
+      - VITE_API_URL=${VITE_API_URL:-http://localhost:${PORT:-5500}}
+      # See vite.config.ts — Docker Desktop bind mounts need polling to see
+      # host-side file changes.
+      - VITE_WATCH_POLLING=1
+    ports:
+      - "5175:5175"
+    volumes:
+      - ./apps/studio-web:/app/apps/studio-web
+      - /app/apps/studio-web/node_modules
+      - ./packages/shared-schemas:/app/packages/shared-schemas
+      - /app/packages/shared-schemas/node_modules
+      - ./packages/ui:/app/packages/ui
+      - /app/packages/ui/node_modules
+
 volumes:
   mongo_data_dev:
   generated_apps_data_dev:
+  studio_assets_data_dev:

@@ -12,3 +12,5 @@ export * from "./platform-auth.schema";
 export * from "./catalog.schema";
 export * from "./generated-app.schema";
 export * from "./chat-message.schema";
+export * from "./studio.schema";
+export * from "./slide-layouts";
