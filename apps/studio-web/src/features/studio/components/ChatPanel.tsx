@@ -1,24 +1,17 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowUpRight, Loader2, Send, Telescope } from "lucide-react";
+import { Loader2, Send, Telescope } from "lucide-react";
 import { Button, Textarea, cn } from "@bismo/ui";
 import type { StudioThread } from "@bismo/shared-schemas";
 import { useSendStudioMessage, useStudioMessages, useStudioStream } from "../queries";
+import { ChatMarkdown } from "./ChatMarkdown";
+import { ArtifactCard } from "./ArtifactCard";
 
 /**
  * Simplified relative to generated-apps' ChatPanel — no Build/Ask/Plan mode
  * switcher, since a Studio turn only ever has one shape (reply, or call a
  * tool to produce an artifact).
  */
-export function ChatPanel({
-  threadId,
-  status,
-  onSelectArtifact,
-}: {
-  threadId: string;
-  status: StudioThread["status"];
-  /** A thread can hold several artifacts (see ArtifactPanel) — clicking a message's artifact link jumps straight to that one. */
-  onSelectArtifact: (artifactId: string) => void;
-}) {
+export function ChatPanel({ threadId, status }: { threadId: string; status: StudioThread["status"] }) {
   const { data: messages, isLoading } = useStudioMessages(threadId);
   const progressLog = useStudioStream(threadId, status === "working");
   const sendMessage = useSendStudioMessage(threadId);
@@ -71,17 +64,12 @@ export function ChatPanel({
                   Deep research
                 </p>
               )}
-              <p className="whitespace-pre-wrap">{message.content}</p>
+              <ChatMarkdown content={message.content} />
             </div>
             {message.artifactId && (
-              <button
-                type="button"
-                onClick={() => onSelectArtifact(message.artifactId!)}
-                className="mt-1 inline-flex items-center gap-1 font-mono text-xs text-[var(--bismo-text-muted)] hover:text-[var(--bismo-accent-blueprint)]"
-              >
-                <ArrowUpRight size={12} strokeWidth={1.75} />
-                artifact updated
-              </button>
+              <div className="mt-1.5 inline-block text-left">
+                <ArtifactCard artifactId={message.artifactId} />
+              </div>
             )}
           </div>
         ))}

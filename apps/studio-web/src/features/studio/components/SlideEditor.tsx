@@ -1,11 +1,14 @@
 import { useEffect, useRef, useState } from "react";
 import type Konva from "konva";
 import {
+  ArrowRight,
+  BarChart3,
   ChevronDown,
   ChevronUp,
   Copy,
   Download,
   Image as ImageIcon,
+  Minus,
   MousePointer2,
   Plus,
   Presentation,
@@ -20,6 +23,7 @@ import type { StudioArtifact } from "@bismo/shared-schemas";
 import {
   SLIDE_HEIGHT,
   SLIDE_LAYOUTS,
+  SLIDE_THEME,
   SLIDE_WIDTH,
   buildSlideFromLayout,
   type SlideData,
@@ -34,13 +38,14 @@ function genId(): string {
   return crypto.randomUUID();
 }
 
-type Tool = "select" | "text" | "shape" | "image" | "table";
+type Tool = "select" | "text" | "shape" | "line" | "arrow" | "image" | "table" | "chart";
 
 const ELEMENT_ICON: Record<SlideElement["type"], typeof Type> = {
   text: Type,
   shape: Square,
   image: ImageIcon,
   table: Table2,
+  chart: BarChart3,
 };
 
 const SHAPE_OPTIONS = [
@@ -55,12 +60,19 @@ const FIT_OPTIONS = [
   { value: "contain", label: "Contain" },
 ];
 
+const CHART_TYPE_OPTIONS = [
+  { value: "bar", label: "Bar" },
+  { value: "line", label: "Line" },
+  { value: "pie", label: "Pie" },
+];
+
 const LAYOUT_OPTIONS = SLIDE_LAYOUTS.map((l) => ({ value: l.id, label: l.label }));
 
 function elementLabel(el: SlideElement): string {
   if (el.type === "text") return el.text.slice(0, 24) || "Text";
   if (el.type === "shape") return `Shape (${el.shape})`;
   if (el.type === "image") return "Image";
+  if (el.type === "chart") return `Chart (${el.chartType})`;
   return "Table";
 }
 
@@ -197,6 +209,26 @@ export function SlideEditor({ artifact }: { artifact: StudioArtifact }) {
       });
     } else if (tool === "shape") {
       addElement({ id: genId(), type: "shape", x: 490, y: 260, w: 300, h: 200, rotation: 0, shape: "rect", fill: "#4F7CFF" });
+    } else if (tool === "line") {
+      // Thin and near-flat (small h) — SlideCanvas draws "line" as a
+      // (0,0)->(w,h) diagonal, so a small h reads as horizontal.
+      addElement({ id: genId(), type: "shape", x: 440, y: 358, w: 300, h: 4, rotation: 0, shape: "line", fill: SLIDE_THEME.body });
+    } else if (tool === "arrow") {
+      addElement({ id: genId(), type: "shape", x: 440, y: 357, w: 300, h: 6, rotation: 0, shape: "arrow", fill: SLIDE_THEME.accentBlue });
+    } else if (tool === "chart") {
+      addElement({
+        id: genId(),
+        type: "chart",
+        x: 440,
+        y: 210,
+        w: 400,
+        h: 300,
+        rotation: 0,
+        chartType: "bar",
+        categories: ["A", "B", "C"],
+        series: [30, 60, 45],
+        color: SLIDE_THEME.accentBlue,
+      });
     } else if (tool === "table") {
       addElement({
         id: genId(),
@@ -301,8 +333,11 @@ export function SlideEditor({ artifact }: { artifact: StudioArtifact }) {
               ["select", MousePointer2, "Select"],
               ["text", Type, "Text"],
               ["shape", Square, "Shape"],
+              ["line", Minus, "Line"],
+              ["arrow", ArrowRight, "Arrow"],
               ["image", ImageIcon, "Image"],
               ["table", Table2, "Table"],
+              ["chart", BarChart3, "Chart"],
             ] as const
           ).map(([tool, Icon, label]) => (
             <button
@@ -512,6 +547,72 @@ export function SlideEditor({ artifact }: { artifact: StudioArtifact }) {
                       + Col
                     </Button>
                   </div>
+                </div>
+              )}
+
+              {selectedElement.type === "chart" && (
+                <div className="flex flex-col gap-2">
+                  <label className="text-xs text-[var(--bismo-text-muted)]">Chart type</label>
+                  <Select
+                    value={selectedElement.chartType}
+                    onValueChange={(v) => updateElement(selectedElement.id, { chartType: v })}
+                    options={CHART_TYPE_OPTIONS}
+                  />
+                  <label className="text-xs text-[var(--bismo-text-muted)]">Color</label>
+                  <input
+                    type="color"
+                    value={selectedElement.color ?? SLIDE_THEME.accentBlue}
+                    onChange={(e) => updateElement(selectedElement.id, { color: e.target.value })}
+                    className="h-8 w-full rounded border border-[var(--bismo-border)] bg-transparent"
+                  />
+                  <label className="text-xs text-[var(--bismo-text-muted)]">Data</label>
+                  <div className="flex flex-col gap-1">
+                    {selectedElement.categories.map((label, i) => (
+                      <div key={i} className="flex gap-1">
+                        <input
+                          value={label}
+                          onChange={(e) => {
+                            const categories = selectedElement.categories.map((c, ci) => (ci === i ? e.target.value : c));
+                            updateElement(selectedElement.id, { categories });
+                          }}
+                          className="min-w-0 flex-1 rounded border border-[var(--bismo-border)] bg-[var(--bismo-bg)] px-1.5 py-1 text-xs text-[var(--bismo-text)]"
+                        />
+                        <input
+                          type="number"
+                          value={selectedElement.series[i] ?? 0}
+                          onChange={(e) => {
+                            const series = selectedElement.series.map((v, vi) => (vi === i ? Number(e.target.value) || 0 : v));
+                            updateElement(selectedElement.id, { series });
+                          }}
+                          className="w-16 rounded border border-[var(--bismo-border)] bg-[var(--bismo-bg)] px-1.5 py-1 text-xs text-[var(--bismo-text)]"
+                        />
+                        <button
+                          type="button"
+                          title="Remove category"
+                          onClick={() => {
+                            const categories = selectedElement.categories.filter((_, ci) => ci !== i);
+                            const series = selectedElement.series.filter((_, vi) => vi !== i);
+                            updateElement(selectedElement.id, { categories, series });
+                          }}
+                          className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded text-[var(--bismo-text-muted)] hover:text-[var(--bismo-status-rejected)]"
+                        >
+                          <Trash2 size={12} strokeWidth={1.75} />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                  <Button
+                    variant="secondary"
+                    size="sm"
+                    onClick={() =>
+                      updateElement(selectedElement.id, {
+                        categories: [...selectedElement.categories, `Cat ${selectedElement.categories.length + 1}`],
+                        series: [...selectedElement.series, 10],
+                      })
+                    }
+                  >
+                    + Category
+                  </Button>
                 </div>
               )}
             </div>

@@ -37,7 +37,11 @@ export async function slidesToPptx(title: string, slides: SlideData[]) {
           valign: "top",
         });
       } else if (el.type === "shape") {
-        const shapeType = el.shape === "ellipse" ? "ellipse" : el.shape === "arrow" ? "rightArrow" : "rect";
+        // "line" fell through to a plain rect here previously — pptxgenjs's
+        // ShapeType enum does include 'line' (confirmed in its .d.ts), so
+        // it maps directly instead of silently degrading.
+        const shapeType =
+          el.shape === "ellipse" ? "ellipse" : el.shape === "arrow" ? "rightArrow" : el.shape === "line" ? "line" : "rect";
         pptxSlide.addShape(shapeType, {
           ...common,
           fill: { color: hex(el.fill), transparency: el.opacity !== undefined ? Math.round((1 - el.opacity) * 100) : 0 },
@@ -52,6 +56,16 @@ export async function slidesToPptx(title: string, slides: SlideData[]) {
           el.rows.map((row) => row.map((cell) => ({ text: cell }))),
           { x: common.x, y: common.y, w: common.w, h: common.h, fontSize: 12 },
         );
+      } else if (el.type === "chart") {
+        // A real, editable PowerPoint chart (not a static image) —
+        // OptsChartData's { labels, values } shape matches our
+        // single-series { categories, series } element exactly.
+        const chartType =
+          el.chartType === "pie" ? pres.ChartType.pie : el.chartType === "line" ? pres.ChartType.line : pres.ChartType.bar;
+        pptxSlide.addChart(chartType, [{ labels: el.categories, values: el.series }], {
+          ...common,
+          chartColors: [hex(el.color ?? "#4F7CFF")],
+        });
       }
     }
 

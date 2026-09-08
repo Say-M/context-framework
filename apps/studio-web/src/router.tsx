@@ -6,10 +6,12 @@ import { loginRoute } from "./routes/(auth)/login";
 import { signupRoute } from "./routes/(auth)/signup";
 import { threadsRoute } from "./routes/_app/threads";
 import { threadDetailRoute } from "./routes/_app/thread-detail";
+import { artifactPageRoute } from "./routes/ArtifactPage";
 
 const routeTree = rootRoute.addChildren([
   authLayoutRoute.addChildren([loginRoute, signupRoute]),
   appLayoutRoute.addChildren([threadsRoute, threadDetailRoute]),
+  artifactPageRoute,
 ]);
 
 export const router = createRouter({ routeTree });

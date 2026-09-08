@@ -6,7 +6,7 @@ import {
   type InferSchemaType,
   type Model,
 } from "mongoose";
-import { BLUEPRINT_SECTIONS } from "@bismo/shared-schemas";
+import { DEFAULT_BLUEPRINT_SECTIONS } from "@bismo/shared-schemas";
 import { approvablePlugin, type ApprovableFields } from "./plugins/approvable.plugin";
 
 const connectionsSchema = new Schema(
@@ -51,7 +51,10 @@ const appBlueprintSchema = new Schema(
       type: connectionsSchema,
       default: () => ({ domainIds: [], modelId: null, orgContextId: null }),
     },
-    sections: { type: [String], default: () => [...BLUEPRINT_SECTIONS] },
+    // A dynamic per-blueprint list of section slugs, not a fixed enum — see
+    // DEFAULT_BLUEPRINT_SECTIONS's doc comment. Authors can add/remove
+    // beyond this starting seed via POST/DELETE /:id/sections.
+    sections: { type: [String], default: () => [...DEFAULT_BLUEPRINT_SECTIONS] },
     rootSpecId: { type: Schema.Types.ObjectId, ref: "Specification", default: null },
     publishedManifest: { type: publishedManifestSchema, default: null },
     publishedAt: { type: Date, default: null },

@@ -86,6 +86,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
     "Create a new document artifact for the user — a report, memo, letter, or any other written content they'll want to keep, edit, and download as a Word file. Use this whenever the request is for a piece of writing, not just a conversational answer.",
     {
       title: z.string().min(1).max(200).describe("A short, descriptive title for the document."),
+      description: z.string().min(1).max(300).describe("A one-sentence summary of what this document contains, shown on its card — not a restatement of the title."),
       // Markdown, not a rich document-tree format: far more reliable for
       // the model to produce correctly, and the frontend's Lexical editor
       // round-trips markdown on load/save via @lexical/markdown — so this
@@ -98,6 +99,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
         createdBy: ctx.createdBy,
         kind: "doc",
         title: args.title,
+        description: args.description,
         content: { markdown: args.markdown },
       });
       ctx.onArtifactReady(String(artifact._id));
@@ -110,6 +112,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
     "Create a new spreadsheet artifact for the user — budgets, trackers, tabular data, anything they'll want to edit as a real spreadsheet (with working formulas) and download as an Excel file. Use this instead of create_doc when the content is naturally tabular/numeric rather than prose.",
     {
       title: z.string().min(1).max(200).describe("A short, descriptive title for the spreadsheet."),
+      description: z.string().min(1).max(300).describe("A one-sentence summary of what this spreadsheet tracks, shown on its card — not a restatement of the title."),
       // A plain dense 2D array — every row must have the same number of
       // cells — rather than Univer's own sparse row/col-keyed cellData
       // format: far simpler for the model to produce reliably. The
@@ -131,6 +134,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
         createdBy: ctx.createdBy,
         kind: "spreadsheet",
         title: args.title,
+        description: args.description,
         content: { rows: args.rows },
       });
       ctx.onArtifactReady(String(artifact._id));
@@ -143,6 +147,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
     `Create a new slide deck artifact for the user — pitch decks, presentations, any content organized as a sequence of slides they'll want to present, edit, and download. Use this instead of create_doc/create_spreadsheet when the request is for a presentation.\n\nEach slide picks ONE layout:\n${slideLayoutGuide}\n\nDon't invent your own layout or coordinates — pick the closest layout and fill in its content fields; the deck opens in a freeform canvas editor where the user can reposition/resize everything afterward. image-left/image-right insert a placeholder box, not a real picture — don't describe it as if it shows something specific.`,
     {
       title: z.string().min(1).max(200).describe("A short, descriptive title for the deck."),
+      description: z.string().min(1).max(300).describe("A one-sentence summary of what this deck covers, shown on its card — not a restatement of the title."),
       slides: z.array(slideInputSchema).min(1).describe("The deck's slides, in presentation order."),
     },
     async (args) => {
@@ -152,6 +157,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
         createdBy: ctx.createdBy,
         kind: "slides",
         title: args.title,
+        description: args.description,
         content: { slides },
       });
       ctx.onArtifactReady(String(artifact._id));
@@ -164,6 +170,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
     "Generate a graphic/image for the user — posters, illustrations, banners, anything visual they'll want to view and download. Use this when the request is for a picture, not a document/spreadsheet/deck.",
     {
       title: z.string().min(1).max(200).describe("A short, descriptive title for the image."),
+      description: z.string().min(1).max(300).describe("A one-sentence summary of what this image shows, shown on its card — not a restatement of the title."),
       prompt: z
         .string()
         .min(1)
@@ -205,6 +212,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
         createdBy: ctx.createdBy,
         kind: "image",
         title: args.title,
+        description: args.description,
         // Just the filename, not an absolute path — the serving route
         // (GET /studio/artifacts/:id/image) reconstructs the full path
         // from STUDIO_ASSETS_DIR, same reasoning as generated-apps' repoDir()
@@ -221,6 +229,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
     "Deliver a completed deep-research report to the user after using WebSearch/WebFetch to gather current, real information from the web. Call this once, at the end of your research, with the finished report and the sources you actually found — not as a first step, and not for questions answerable from general knowledge alone (reply directly, or use create_doc, for those).",
     {
       title: z.string().min(1).max(200).describe("A short, descriptive title for the report."),
+      description: z.string().min(1).max(300).describe("A one-sentence summary of what this report found, shown on its card — not a restatement of the title."),
       markdownReport: z
         .string()
         .min(1)
@@ -241,6 +250,7 @@ export function buildStudioMcpServer(ctx: StudioToolContext) {
         createdBy: ctx.createdBy,
         kind: "research",
         title: args.title,
+        description: args.description,
         content: { markdownReport: args.markdownReport, sources: args.sources },
       });
       ctx.onArtifactReady(String(artifact._id));

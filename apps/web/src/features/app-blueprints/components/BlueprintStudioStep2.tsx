@@ -1,5 +1,6 @@
 import { useState } from "react";
-import type { AppBlueprint, BlueprintSection, FolderNode } from "@bismo/shared-schemas";
+import { Plus } from "lucide-react";
+import type { AppBlueprint, FolderNode } from "@bismo/shared-schemas";
 import {
   Button,
   ConfirmDialog,
@@ -9,7 +10,7 @@ import {
   SpecViewer,
   VersionHistoryPanel,
 } from "@bismo/ui";
-import { useDeleteBlueprintFolder, useSectionTree } from "../queries";
+import { useDeleteBlueprintFolder, useDeleteBlueprintSection, useSectionTree } from "../queries";
 import {
   useDeleteSpecification,
   useSpecification,
@@ -19,22 +20,8 @@ import { AddSpecDialog } from "@/features/specifications/components/AddSpecDialo
 import { EditSpecDialog } from "@/features/specifications/components/EditSpecDialog";
 import { ApiError } from "@/lib/api-client";
 import { useBlueprintStudio } from "../context/BlueprintStudioContext";
+import { CreateSectionDialog } from "./CreateSectionDialog";
 import { CreateSubfolderDialog } from "./CreateSubfolderDialog";
-
-const SECTION_LABELS: Record<BlueprintSection, string> = {
-  data_model: "Data Model",
-  screens: "Screens",
-  forms: "Forms",
-  workflows: "Workflows",
-  business_rules: "Business Rules",
-  permissions: "Permissions",
-  states: "States",
-  ai_agents: "AI Agents",
-  reports: "Reports",
-  integrations: "Integrations",
-  notifications: "Notifications",
-  audit_trail: "Audit Trail",
-};
 
 function mapFolderNode(node: FolderNode): FileTreeFolder {
   return {
@@ -51,11 +38,11 @@ function countFolderSpecs(node: FolderNode): number {
 }
 
 interface AddSpecTarget {
-  section: BlueprintSection;
+  section: string;
   parentFolderPath: string | null;
 }
 interface AddFolderTarget {
-  section: BlueprintSection;
+  section: string;
   parentFolderPath: string | null;
 }
 
@@ -64,8 +51,11 @@ export function BlueprintStudioStep2({ blueprint }: { blueprint: AppBlueprint })
   const { data: tree, isLoading } = useSectionTree(blueprint.id);
   const [addSpecTarget, setAddSpecTarget] = useState<AddSpecTarget | null>(null);
   const [addFolderTarget, setAddFolderTarget] = useState<AddFolderTarget | null>(null);
+  const [addSectionOpen, setAddSectionOpen] = useState(false);
   const [deleteFolderId, setDeleteFolderId] = useState<string | null>(null);
   const [folderDeleteError, setFolderDeleteError] = useState<string | null>(null);
+  const [deleteSectionSlug, setDeleteSectionSlug] = useState<string | null>(null);
+  const [sectionDeleteError, setSectionDeleteError] = useState<string | null>(null);
   const [editOpen, setEditOpen] = useState(false);
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -73,6 +63,7 @@ export function BlueprintStudioStep2({ blueprint }: { blueprint: AppBlueprint })
   const { data: selectedSpec } = useSpecification(selectedFileId);
   const deleteSpec = useDeleteSpecification({ parentType: "AppBlueprint", parentId: blueprint.id });
   const deleteFolder = useDeleteBlueprintFolder(blueprint.id);
+  const deleteSection = useDeleteBlueprintSection(blueprint.id);
   const { data: versionsData, isLoading: versionsLoading } = useSpecificationVersions(
     historyOpen ? selectedFileId : null,
   );
@@ -95,26 +86,30 @@ export function BlueprintStudioStep2({ blueprint }: { blueprint: AppBlueprint })
           <h3 className="text-xs font-semibold uppercase tracking-wide text-[var(--bismo-text-muted)]">
             Blueprint Sections ({totalFiles} files)
           </h3>
+          <Button size="sm" variant="secondary" onClick={() => setAddSectionOpen(true)}>
+            <Plus size={13} strokeWidth={1.75} />
+            Add Section
+          </Button>
         </div>
         <FileTree
           rootFile={tree.root ? { id: tree.root.id, filename: tree.root.filename } : null}
           sections={tree.sections.map((s) => ({
             slug: s.slug,
-            label: SECTION_LABELS[s.slug],
+            label: s.label,
             files: s.specs.map((spec) => ({ id: spec.id, filename: spec.filename })),
             folders: s.folders.map(mapFolderNode),
           }))}
           selectedFileId={selectedFileId}
           onSelectFile={setSelectedFileId}
-          onAddSpec={(slug, parentFolderPath) =>
-            setAddSpecTarget({ section: slug as BlueprintSection, parentFolderPath })
-          }
-          onAddFolder={(slug, parentFolderPath) =>
-            setAddFolderTarget({ section: slug as BlueprintSection, parentFolderPath })
-          }
+          onAddSpec={(slug, parentFolderPath) => setAddSpecTarget({ section: slug, parentFolderPath })}
+          onAddFolder={(slug, parentFolderPath) => setAddFolderTarget({ section: slug, parentFolderPath })}
           onDeleteFolder={(_slug, folderId) => {
             setFolderDeleteError(null);
             setDeleteFolderId(folderId);
+          }}
+          onDeleteSection={(slug) => {
+            setSectionDeleteError(null);
+            setDeleteSectionSlug(slug);
           }}
         />
       </div>
@@ -122,7 +117,7 @@ export function BlueprintStudioStep2({ blueprint }: { blueprint: AppBlueprint })
       <div className="rounded-lg border border-[var(--bismo-border)] bg-[var(--bismo-bg-elevated)] p-4">
         {!selectedSpec ? (
           <p className="text-sm text-[var(--bismo-text-muted)]">
-            Select a file on the left, or add a new spec to one of the 12 sections.
+            Select a file on the left, or add a new spec to one of the blueprint's sections.
           </p>
         ) : (
           <>
@@ -163,7 +158,7 @@ export function BlueprintStudioStep2({ blueprint }: { blueprint: AppBlueprint })
           onOpenChange={(open) => !open && setAddSpecTarget(null)}
           parentType="AppBlueprint"
           parentId={blueprint.id}
-          parentName={`${blueprint.name} — ${SECTION_LABELS[addSpecTarget.section]}`}
+          parentName={`${blueprint.name} — ${tree.sections.find((s) => s.slug === addSpecTarget.section)?.label ?? addSpecTarget.section}`}
           section={addSpecTarget.section}
           folderPath={addSpecTarget.parentFolderPath}
         />
@@ -174,9 +169,36 @@ export function BlueprintStudioStep2({ blueprint }: { blueprint: AppBlueprint })
           open={!!addFolderTarget}
           onOpenChange={(open) => !open && setAddFolderTarget(null)}
           blueprintId={blueprint.id}
+          sections={tree.sections.map((s) => ({ slug: s.slug, label: s.label }))}
           fixedSection={addFolderTarget.section}
           parentFolderPath={addFolderTarget.parentFolderPath}
         />
+      )}
+
+      {addSectionOpen && (
+        <CreateSectionDialog open={addSectionOpen} onOpenChange={setAddSectionOpen} blueprintId={blueprint.id} />
+      )}
+
+      {deleteSectionSlug && (
+        <ConfirmDialog
+          open={!!deleteSectionSlug}
+          onOpenChange={(open) => !open && setDeleteSectionSlug(null)}
+          title="Delete this section?"
+          description="This permanently removes the section, every folder inside it, and every specification they contain. This can't be undone."
+          confirmLabel="Delete"
+          isPending={deleteSection.isPending}
+          onConfirm={() => {
+            setSectionDeleteError(null);
+            deleteSection.mutate(deleteSectionSlug, {
+              onSuccess: () => setDeleteSectionSlug(null),
+              onError: (err) =>
+                setSectionDeleteError(err instanceof ApiError ? err.message : "Something went wrong"),
+            });
+          }}
+        />
+      )}
+      {sectionDeleteError && (
+        <p className="text-sm text-[var(--bismo-status-rejected)]">{sectionDeleteError}</p>
       )}
 
       {deleteFolderId && (

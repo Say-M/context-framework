@@ -1,10 +1,27 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef } from "react";
 import type Konva from "konva";
-import { Arrow, Ellipse, Group, Layer, Line, Rect, Stage, Text as KonvaText, Transformer, Image as KonvaImage } from "react-konva";
+import {
+  Arrow,
+  Circle,
+  Ellipse,
+  Group,
+  Layer,
+  Line,
+  Rect,
+  Stage,
+  Text as KonvaText,
+  Transformer,
+  Wedge,
+  Image as KonvaImage,
+} from "react-konva";
 import { SLIDE_HEIGHT, SLIDE_WIDTH, type SlideData, type SlideElement } from "@bismo/shared-schemas";
 import { useHtmlImage } from "./useHtmlImage";
 
 const MIN_SIZE = 20;
+
+// Cycled through for pie slices — v1 has no per-slice color editing (see
+// the "Studio Slides N2" plan section), so a small fixed palette stands in.
+const CHART_PALETTE = ["#4F7CFF", "#F2B84B", "#7EE0C0", "#E4708A", "#B98EF2"];
 
 function TableElement({ el }: { el: Extract<SlideElement, { type: "table" }> }) {
   const rows = el.rows.length || 1;
@@ -38,6 +55,88 @@ function TableElement({ el }: { el: Extract<SlideElement, { type: "table" }> }) 
           />
         )),
       )}
+    </>
+  );
+}
+
+/**
+ * Bar/line/pie rendered with plain Konva primitives (Rect/Line/Wedge) —
+ * see the "Studio Slides N2" plan section for why: adding a DOM/SVG
+ * charting library would need the same kind of canvas-coordinate bridging
+ * the text-edit overlay above already flags as a workaround, not a pattern
+ * worth repeating for something this central. v1 is single-series only.
+ */
+function ChartElement({ el }: { el: Extract<SlideElement, { type: "chart" }> }) {
+  const { w, h, categories, series } = el;
+  const color = el.color ?? CHART_PALETTE[0]!;
+  const max = Math.max(1, ...series.map((v) => Math.max(0, v)));
+
+  if (el.chartType === "pie") {
+    const total = series.reduce((sum, v) => sum + Math.max(0, v), 0) || 1;
+    const cx = w / 2;
+    const cy = h / 2;
+    const radius = Math.max(1, Math.min(w, h) / 2 - 4);
+    let rotation = 0;
+    return (
+      <>
+        {series.map((value, i) => {
+          const angle = (Math.max(0, value) / total) * 360;
+          const wedge = (
+            <Wedge key={i} x={cx} y={cy} radius={radius} angle={angle} rotation={rotation} fill={CHART_PALETTE[i % CHART_PALETTE.length]} />
+          );
+          rotation += angle;
+          return wedge;
+        })}
+      </>
+    );
+  }
+
+  const labelHeight = 18;
+  const plotH = Math.max(1, h - labelHeight - 8);
+  const n = Math.max(1, categories.length);
+  const slot = w / n;
+
+  if (el.chartType === "line") {
+    const points = categories.flatMap((_, i) => {
+      const value = Math.max(0, series[i] ?? 0);
+      return [slot * (i + 0.5), plotH - (value / max) * plotH];
+    });
+    return (
+      <>
+        <Line points={[0, plotH, w, plotH]} stroke="#3A3F4E" strokeWidth={1} />
+        <Line points={points} stroke={color} strokeWidth={3} lineJoin="round" />
+        {categories.map((label, i) => {
+          const value = Math.max(0, series[i] ?? 0);
+          const x = slot * (i + 0.5);
+          const y = plotH - (value / max) * plotH;
+          return (
+            <Group key={i}>
+              <Circle x={x} y={y} radius={4} fill={color} />
+              <KonvaText x={slot * i} y={plotH + 4} width={slot} align="center" text={label} fontSize={12} fontFamily="Arial" fill="#B4B8C5" />
+            </Group>
+          );
+        })}
+      </>
+    );
+  }
+
+  // bar
+  const barGap = Math.min(12, slot * 0.2);
+  const barW = Math.max(2, slot - barGap * 2);
+  return (
+    <>
+      <Line points={[0, plotH, w, plotH]} stroke="#3A3F4E" strokeWidth={1} />
+      {categories.map((label, i) => {
+        const value = Math.max(0, series[i] ?? 0);
+        const barH = (value / max) * plotH;
+        const x = slot * i + barGap;
+        return (
+          <Group key={i}>
+            <Rect x={x} y={plotH - barH} width={barW} height={barH} fill={color} />
+            <KonvaText x={slot * i} y={plotH + 4} width={slot} align="center" text={label} fontSize={12} fontFamily="Arial" fill="#B4B8C5" />
+          </Group>
+        );
+      })}
     </>
   );
 }
@@ -96,6 +195,8 @@ function ElementInner({ el }: { el: SlideElement }) {
       return <ImageElement el={el} />;
     case "table":
       return <TableElement el={el} />;
+    case "chart":
+      return <ChartElement el={el} />;
   }
 }
 
@@ -134,7 +235,6 @@ export function SlideCanvas({
   registerNode: (elementId: string, node: Konva.Group | null) => void;
 }) {
   const trRef = useRef<Konva.Transformer>(null);
-  const [nodesVersion, setNodesVersion] = useState(0);
 
   useEffect(() => {
     const tr = trRef.current;
@@ -150,8 +250,14 @@ export function SlideCanvas({
       tr.nodes([node]);
       tr.getLayer()?.batchDraw();
     }
+    // slide.elements.length covers "a new element was just added and needs
+    // its Group to exist before Transformer can find it" — no extra
+    // "nodesVersion" render-triggered-from-a-ref-callback bump is needed
+    // (that pattern used to cause an infinite Group ref -> setState ->
+    // re-render -> new ref identity -> ref fires again loop, since the
+    // inline ref callback is a new function on every render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [selectedElementId, nodesVersion, slide.elements.length]);
+  }, [selectedElementId, slide.elements.length]);
 
   const handleTransformEnd = (el: SlideElement, node: Konva.Group) => {
     const scaleX = node.scaleX();
@@ -186,10 +292,7 @@ export function SlideCanvas({
             rotation={el.rotation}
             draggable
             visible={editingElementId !== el.id}
-            ref={(node) => {
-              registerNode(el.id, node);
-              if (node) setNodesVersion((v) => v + 1);
-            }}
+            ref={(node) => registerNode(el.id, node)}
             onClick={() => onSelect(el.id)}
             onTap={() => onSelect(el.id)}
             onDblClick={() => {

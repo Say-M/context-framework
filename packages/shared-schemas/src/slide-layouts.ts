@@ -83,7 +83,18 @@ export interface TableSlideElement extends SlideElementBase {
   rows: string[][];
 }
 
-export type SlideElement = TextSlideElement | ShapeSlideElement | ImageSlideElement | TableSlideElement;
+// v1 is deliberately single-series (one value per category) — matches
+// pptxgenjs's OptsChartData shape ({ labels, values }) exactly, so export
+// needs no translation layer. Multi-series is a clear, separate extension.
+export interface ChartSlideElement extends SlideElementBase {
+  type: "chart";
+  chartType: "bar" | "line" | "pie";
+  categories: string[];
+  series: number[];
+  color?: string;
+}
+
+export type SlideElement = TextSlideElement | ShapeSlideElement | ImageSlideElement | TableSlideElement | ChartSlideElement;
 
 export interface SlideData {
   id: string;

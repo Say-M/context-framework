@@ -49,6 +49,7 @@ function serializeStudioArtifact(doc: StudioArtifactDocument) {
     createdBy: String(doc.createdBy),
     kind: doc.kind,
     title: doc.title,
+    description: doc.description ?? "",
     version: doc.version,
     content: doc.content,
     createdAt: doc.createdAt.toISOString(),

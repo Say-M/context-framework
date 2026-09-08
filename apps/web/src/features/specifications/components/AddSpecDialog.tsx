@@ -2,7 +2,7 @@ import { useState } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import type { BlueprintSection, ParentType } from "@bismo/shared-schemas";
+import type { ParentType } from "@bismo/shared-schemas";
 import { Button, Dialog, FormField, Input, Textarea } from "@bismo/ui";
 import { createSpecificationSchema, type CreateSpecificationInput } from "@bismo/shared-schemas";
 import { ApiError } from "@/lib/api-client";
@@ -39,9 +39,11 @@ const PARENT_TYPE_COPY: Record<ParentType, { noun: string; starterContent: strin
   },
 };
 
-// Section-specific starter templates for Blueprint Studio Step 2 — falls
-// back to the generic AppBlueprint template above for unlisted sections.
-const BLUEPRINT_SECTION_STARTERS: Partial<Record<BlueprintSection, string>> = {
+// Section-specific starter templates for Blueprint Studio Step 2 — sections
+// are a dynamic, per-blueprint list (not a fixed 12), so this is
+// intentionally partial: falls back to the generic AppBlueprint template
+// above for any section not listed here, including user-created ones.
+const BLUEPRINT_SECTION_STARTERS: Partial<Record<string, string>> = {
   data_model: "## Entity Schema\n- Fields...",
   screens: "## Screen Layout\n- Wireframe notes...",
   workflows: "## Workflow Steps\n- Trigger conditions...",
@@ -63,8 +65,8 @@ export function AddSpecDialog({
   parentType: ParentType;
   parentId: string;
   parentName: string;
-  /** Required in practice for parentType === 'AppBlueprint' (one of the 12 fixed sections). */
-  section?: BlueprintSection | null;
+  /** Required in practice for parentType === 'AppBlueprint' — one of that blueprint's own (dynamic) sections. */
+  section?: string | null;
   /** Nests the new spec inside this existing BlueprintFolder path instead of the section root. */
   folderPath?: string | null;
 }) {

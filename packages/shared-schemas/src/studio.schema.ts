@@ -62,6 +62,7 @@ export const studioArtifactSchema = z.object({
   createdBy: objectIdSchema,
   kind: studioArtifactKindSchema,
   title: z.string(),
+  description: z.string(),
   version: z.number().int(),
   // Shape depends on `kind` — see StudioArtifact.model.ts for the per-kind
   // documented shapes. Left unvalidated here since one artifact endpoint

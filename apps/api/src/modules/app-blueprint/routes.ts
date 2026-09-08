@@ -7,6 +7,7 @@ import {
   connectionsSchema,
   createAppBlueprintSchema,
   createBlueprintFolderSchema,
+  createBlueprintSectionSchema,
   listAppBlueprintsQuerySchema,
   objectIdSchema,
   okfManifestSchema,
@@ -18,8 +19,10 @@ import { okResponseSchema, paginatedResponseSchema } from "../../lib/openapi-res
 import {
   createAppBlueprint,
   createBlueprintFolder,
+  createBlueprintSection,
   deleteAppBlueprint,
   deleteBlueprintFolder,
+  deleteBlueprintSection,
   getAppBlueprint,
   getSectionTree,
   listAppBlueprints,
@@ -32,6 +35,7 @@ import {
 
 const idParamSchema = z.object({ id: objectIdSchema });
 const folderIdParamSchema = z.object({ id: objectIdSchema, folderId: objectIdSchema });
+const sectionParamSchema = z.object({ id: objectIdSchema, slug: z.string().trim().min(1) });
 const tags = ["App Blueprints"];
 
 export const appBlueprintRoutes = new Hono<{ Variables: AppVariables }>();
@@ -177,9 +181,9 @@ appBlueprintRoutes.get(
   "/:id/sections",
   describeRoute({
     tags,
-    summary: "Get the 12-section blueprint tree (Studio Step 2)",
+    summary: "Get the blueprint's section tree (Studio Step 2)",
     description:
-      "Returns the fixed 12 blueprint sections with their nested specifications and folders (folders nest to arbitrary depth, so the response body isn't schema-typed here).",
+      "Returns the blueprint's own sections (a dynamic, per-blueprint list — see POST/DELETE /:id/sections) with their nested specifications and folders (folders nest to arbitrary depth, so the response body isn't schema-typed here).",
     security: [{ bearerAuth: [] }],
     responses: {
       200: {
@@ -191,6 +195,51 @@ appBlueprintRoutes.get(
   async (c) => {
     const tree = await getSectionTree(c.req.valid("param").id);
     return c.json(tree);
+  },
+);
+
+appBlueprintRoutes.post(
+  "/:id/sections",
+  describeRoute({
+    tags,
+    summary: "Create a blueprint section",
+    description: "Adds a new section to the blueprint, alongside its starting defaults.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      201: { description: "Created section" },
+    },
+  }),
+  zValidator("param", idParamSchema),
+  zValidator("json", createBlueprintSectionSchema),
+  async (c) => {
+    const section = await createBlueprintSection(
+      c.req.valid("param").id,
+      c.req.valid("json"),
+      c.get("user"),
+    );
+    return c.json(section, 201);
+  },
+);
+
+appBlueprintRoutes.delete(
+  "/:id/sections/:slug",
+  describeRoute({
+    tags,
+    summary: "Delete a blueprint section",
+    description: "Cascades: also removes every folder and specification under this section.",
+    security: [{ bearerAuth: [] }],
+    responses: {
+      200: {
+        description: "Deleted",
+        content: { "application/json": { schema: resolver(okResponseSchema) } },
+      },
+    },
+  }),
+  zValidator("param", sectionParamSchema),
+  async (c) => {
+    const { id, slug } = c.req.valid("param");
+    await deleteBlueprintSection(id, slug, c.get("user"));
+    return c.json({ ok: true });
   },
 );
 

@@ -3,17 +3,11 @@ import { createUniver, LocaleType, mergeLocales } from "@univerjs/presets";
 import { UniverSheetsCorePreset } from "@univerjs/preset-sheets-core";
 import UniverPresetSheetsCoreEnUS from "@univerjs/preset-sheets-core/locales/en-US";
 import "@univerjs/preset-sheets-core/lib/index.css";
-import ExcelJS from "exceljs";
 import { Download, Save } from "lucide-react";
 import { Button } from "@bismo/ui";
 import type { StudioArtifact } from "@bismo/shared-schemas";
 import { useUpdateStudioArtifact } from "../queries";
-
-interface Cell {
-  value: string | number | boolean | null;
-  formula?: string;
-}
-type Rows = Cell[][];
+import { rowsToXlsxBlob, type SheetCell as Cell, type SheetRows as Rows } from "../lib/sheetXlsx";
 
 function toICellData(rows: Rows) {
   return rows.map((row) => row.map((cell) => (cell.formula ? { v: cell.value, f: cell.formula } : { v: cell.value })));
@@ -108,32 +102,11 @@ export function SheetEditor({ artifact }: { artifact: StudioArtifact }) {
     update.mutate({ content: { rows: fromSnapshot(snapshot) } });
   };
 
-  // Built with exceljs from the same {value, formula} rows Save uses, not
-  // via Univer's own export — that path (exportSheetBySnapshotAsync) turned
-  // out to require Univer's paid Pro tier plus a self-hosted exchange
-  // server (confirmed live: it throws "not a function" on the free preset
-  // this app uses). exceljs is free, client-side, and needs nothing extra.
   const handleDownload = async () => {
     const api = apiRef.current;
     if (!api) return;
     const rows = fromSnapshot(api.getActiveWorkbook().save());
-
-    const workbook = new ExcelJS.Workbook();
-    // Excel worksheet names: max 31 chars, and can't contain \/*?:[] — an
-    // AI-generated title could plausibly contain any of these.
-    const sheetName = artifact.title.replace(/[\\/*?:[\]]/g, " ").slice(0, 31).trim() || "Sheet1";
-    const sheet = workbook.addWorksheet(sheetName);
-    rows.forEach((row, r) => {
-      row.forEach((cell, c) => {
-        const target = sheet.getCell(r + 1, c + 1);
-        target.value = cell.formula
-          ? { formula: cell.formula.replace(/^=/, ""), result: typeof cell.value === "number" ? cell.value : undefined }
-          : cell.value;
-      });
-    });
-
-    const buffer = await workbook.xlsx.writeBuffer();
-    const blob = new Blob([buffer], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+    const blob = await rowsToXlsxBlob(artifact.title, rows);
     const url = URL.createObjectURL(blob);
     const anchor = document.createElement("a");
     anchor.href = url;

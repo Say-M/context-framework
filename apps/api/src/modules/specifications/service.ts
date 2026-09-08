@@ -18,10 +18,11 @@ const DEFAULT_TRUST_TIER = "human-reviewed";
 const DEFAULT_STATUS = "stable";
 const DEFAULT_STALE_AFTER_DAYS = 365;
 
-// Only these 5 of the 12 Blueprint Studio sections get a distinct type
-// badge (matching the product mockups); everything else — including a
-// section-less spec, which shouldn't happen in practice since Step 2 always
-// requires picking a section — falls back to the parent's defaultSpecType.
+// Only these 5 sections get a distinct type badge (matching the product
+// mockups) — intentionally partial now that a blueprint's sections are a
+// dynamic, per-blueprint list rather than a fixed 12: any section not
+// listed here (including user-created ones) falls back to the parent's
+// defaultSpecType, same as a section-less spec would.
 const APP_BLUEPRINT_SECTION_TYPES: Record<string, string> = {
   data_model: "Entity",
   screens: "Screen",

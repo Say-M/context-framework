@@ -32,6 +32,11 @@ const studioArtifactSchema = new Schema(
     createdBy: { type: Schema.Types.ObjectId, ref: "PlatformUser", required: true },
     kind: { type: String, enum: ["doc", "spreadsheet", "slides", "image", "research"], required: true },
     title: { type: String, required: true },
+    // A one-sentence subtitle shown on the artifact's chat card — set by
+    // the agent's create/deliver tools (see studioTools.ts), not derived
+    // from title/content, so it reads like a real summary rather than a
+    // restatement of the title.
+    description: { type: String, default: "" },
     // Bumped on every edit (agent-produced or user-edited) so the frontend
     // can detect a stale in-memory copy after a save.
     version: { type: Number, required: true, default: 1 },

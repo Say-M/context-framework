@@ -1,6 +1,5 @@
 import { z } from "zod";
 import { objectIdSchema, paginationQuerySchema } from "./common.schema";
-import { BLUEPRINT_SECTIONS } from "./specification.schema";
 
 export const appBlueprintStatusSchema = z.enum(["draft", "pending", "approved", "rejected"]);
 export type AppBlueprintStatus = z.infer<typeof appBlueprintStatusSchema>;
@@ -64,7 +63,10 @@ export const appBlueprintSchema = z.object({
   description: z.string(),
   version: z.string(),
   connections: connectionsSchema,
-  sections: z.array(z.enum(BLUEPRINT_SECTIONS)),
+  // A dynamic, per-blueprint list of section slugs — not a closed enum.
+  // See DEFAULT_BLUEPRINT_SECTIONS in specification.schema.ts for the
+  // starting seed a new blueprint gets; authors can add/remove from there.
+  sections: z.array(z.string()),
   rootSpecId: objectIdSchema.nullable(),
   publishedManifest: okfManifestSchema.nullable(),
   publishedAt: z.string().datetime().nullable(),
@@ -111,7 +113,8 @@ export const sectionTreeSchema = z.object({
   root: specSummarySchema.nullable(),
   sections: z.array(
     z.object({
-      slug: z.enum(BLUEPRINT_SECTIONS),
+      slug: z.string(),
+      label: z.string(),
       specs: z.array(specSummarySchema),
       folders: z.array(folderNodeSchema),
     }),
@@ -119,8 +122,16 @@ export const sectionTreeSchema = z.object({
 });
 export type SectionTree = z.infer<typeof sectionTreeSchema>;
 
+export const createBlueprintSectionSchema = z.object({
+  // The display name the author typed — the server slugifies this (and
+  // that slug is what folders/specs actually reference); labels aren't
+  // stored separately, see formatSectionLabel in specification.schema.ts.
+  name: z.string().trim().min(1).max(100),
+});
+export type CreateBlueprintSectionInput = z.infer<typeof createBlueprintSectionSchema>;
+
 export const createBlueprintFolderSchema = z.object({
-  section: z.enum(BLUEPRINT_SECTIONS),
+  section: z.string().trim().min(1).max(100),
   // Path of the existing parent folder to nest under (e.g.
   // "approval_rules"), or null/omitted to create a top-level folder
   // directly under the section.
@@ -137,7 +148,7 @@ export type CreateBlueprintFolderInput = z.infer<typeof createBlueprintFolderSch
 export const blueprintFolderSchema = z.object({
   id: objectIdSchema,
   blueprintId: objectIdSchema,
-  section: z.enum(BLUEPRINT_SECTIONS),
+  section: z.string(),
   parentFolderId: objectIdSchema.nullable(),
   name: z.string(),
   path: z.string(),

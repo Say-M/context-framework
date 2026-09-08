@@ -32,6 +32,8 @@ export interface FileTreeProps {
   onAddSpec: (sectionSlug: string, parentFolderPath: string | null) => void;
   onAddFolder: (sectionSlug: string, parentFolderPath: string | null) => void;
   onDeleteFolder?: (sectionSlug: string, folderId: string) => void;
+  /** When provided, a section gets its own delete button in the header (sections are a dynamic, user-managed list, not a fixed set). */
+  onDeleteSection?: (sectionSlug: string) => void;
   className?: string;
 }
 
@@ -43,6 +45,7 @@ export function FileTree({
   onAddSpec,
   onAddFolder,
   onDeleteFolder,
+  onDeleteSection,
   className,
 }: FileTreeProps) {
   const [expanded, setExpanded] = useState<Set<string>>(new Set());
@@ -73,6 +76,11 @@ export function FileTree({
                 <IconButton title="Add spec" onClick={() => onAddSpec(section.slug, null)}>
                   <FilePlus size={14} strokeWidth={1.75} />
                 </IconButton>
+                {onDeleteSection && (
+                  <IconButton title="Delete section" onClick={() => onDeleteSection(section.slug)}>
+                    <Trash2 size={14} strokeWidth={1.75} />
+                  </IconButton>
+                )}
               </div>
             </div>
             {isEmpty ? (

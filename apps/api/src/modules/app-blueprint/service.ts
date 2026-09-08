@@ -13,11 +13,11 @@ import {
 } from "@bismo/db-models";
 import { withTransaction } from "../../config/db";
 import {
-  BLUEPRINT_SECTIONS,
-  type BlueprintSection,
+  formatSectionLabel,
   type ConnectionsInput,
   type CreateAppBlueprintInput,
   type CreateBlueprintFolderInput,
+  type CreateBlueprintSectionInput,
   type FolderNode,
   type ListAppBlueprintsQuery,
   type UpdateAppBlueprintMetadataInput,
@@ -289,11 +289,15 @@ export async function getSectionTree(id: string) {
   };
 
   const root = specs.find((s) => s.section === null || s.section === undefined) ?? null;
-  const sections = BLUEPRINT_SECTIONS.map((slug: BlueprintSection) => {
+  // Reads the blueprint's own dynamic `sections` field, not a fixed
+  // constant — this is what makes section create/delete (below) actually
+  // show up in the tree.
+  const sections = doc.sections.map((slug) => {
     const topLevelFolders = folders.filter((f) => f.section === slug && !f.parentFolderId);
     const rootSpecs = specs.filter((s) => s.section === slug && !s.folderPath);
     return {
       slug,
+      label: formatSectionLabel(slug),
       specs: rootSpecs.map(toSummary),
       folders: topLevelFolders.map(buildFolderNode),
     };
@@ -310,6 +314,65 @@ function assertCanManageFolders(doc: AppBlueprintDocument, actor: AuthUser) {
       message: "Only the blueprint's author or an admin can manage its folders",
     });
   }
+}
+
+function slugifySectionName(name: string): string {
+  const slug = name
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+  if (!slug) {
+    throw new HTTPException(400, { message: "Section name must contain at least one letter or number" });
+  }
+  return slug;
+}
+
+export async function createBlueprintSection(
+  blueprintId: string,
+  input: CreateBlueprintSectionInput,
+  actor: AuthUser,
+) {
+  const doc = await getAppBlueprint(blueprintId);
+  assertCanManageFolders(doc, actor);
+
+  const slug = slugifySectionName(input.name);
+  // Atomic guard: `sections` is a plain embedded array (not its own
+  // collection with a unique index), so uniqueness is enforced by
+  // conditioning the update on the slug not already being present rather
+  // than a duplicate-key error — same intent as the 11000 check
+  // createBlueprintFolder relies on, just expressed via Mongo's array `$ne`.
+  const updated = await AppBlueprintModel.findOneAndUpdate(
+    { _id: blueprintId, sections: { $ne: slug } },
+    { $push: { sections: slug } },
+    { new: true },
+  );
+  if (!updated) {
+    throw new HTTPException(409, { message: `A section named "${formatSectionLabel(slug)}" already exists` });
+  }
+  return { slug, label: formatSectionLabel(slug) };
+}
+
+export async function deleteBlueprintSection(blueprintId: string, slug: string, actor: AuthUser) {
+  const doc = await getAppBlueprint(blueprintId);
+  assertCanManageFolders(doc, actor);
+
+  if (!doc.sections.includes(slug)) {
+    throw new HTTPException(404, { message: "Section not found" });
+  }
+
+  // Same cascade shape as deleteBlueprintFolder: everything living under
+  // this section goes with it, in one transaction so a crash midway can't
+  // leave orphaned specs/folders or a section removed from the list while
+  // its content still exists.
+  await withTransaction(async (session) => {
+    await SpecificationModel.deleteMany(
+      { parentType: "AppBlueprint", parentId: blueprintId, section: slug },
+      { session },
+    );
+    await BlueprintFolderModel.deleteMany({ blueprintId, section: slug }, { session });
+    await AppBlueprintModel.updateOne({ _id: blueprintId }, { $pull: { sections: slug } }, { session });
+  });
 }
 
 export async function createBlueprintFolder(

@@ -5,6 +5,7 @@ import type {
   ConnectionsInput,
   CreateAppBlueprintInput,
   CreateBlueprintFolderInput,
+  CreateBlueprintSectionInput,
   ListAppBlueprintsQuery,
   OkfManifest,
   SectionTree,
@@ -107,6 +108,27 @@ export function useManifestPreview(id: string | null) {
     queryKey: appBlueprintKeys.manifest(id ?? "none"),
     queryFn: () => apiRequest<OkfManifest>(`/api/v1/app-blueprints/${id}/manifest`),
     enabled: !!id,
+  });
+}
+
+export function useCreateBlueprintSection(blueprintId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (input: CreateBlueprintSectionInput) =>
+      apiRequest<{ slug: string; label: string }>(`/api/v1/app-blueprints/${blueprintId}/sections`, {
+        method: "POST",
+        body: JSON.stringify(input),
+      }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: appBlueprintKeys.sections(blueprintId) }),
+  });
+}
+
+export function useDeleteBlueprintSection(blueprintId: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: (slug: string) =>
+      apiRequest(`/api/v1/app-blueprints/${blueprintId}/sections/${slug}`, { method: "DELETE" }),
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: appBlueprintKeys.sections(blueprintId) }),
   });
 }
 

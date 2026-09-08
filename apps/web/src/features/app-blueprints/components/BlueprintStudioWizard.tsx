@@ -13,7 +13,7 @@ import { BlueprintStudioStep3 } from "./BlueprintStudioStep3";
 
 const STEPS = [
   { label: "1. Module Connections" },
-  { label: "2. 12 Blueprint Sections" },
+  { label: "2. Blueprint Sections" },
   { label: "3. Review & Publish" },
 ];
 

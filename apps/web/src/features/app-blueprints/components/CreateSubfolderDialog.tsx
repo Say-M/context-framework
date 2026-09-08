@@ -2,28 +2,12 @@ import { useState } from "react";
 import { Controller, useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { BLUEPRINT_SECTIONS, type BlueprintSection } from "@bismo/shared-schemas";
 import { Button, Dialog, FormField, Input, Select } from "@bismo/ui";
 import { ApiError } from "@/lib/api-client";
 import { useCreateBlueprintFolder } from "../queries";
 
-const SECTION_LABELS: Record<BlueprintSection, string> = {
-  data_model: "Data Model",
-  screens: "Screens",
-  forms: "Forms",
-  workflows: "Workflows",
-  business_rules: "Business Rules",
-  permissions: "Permissions",
-  states: "States",
-  ai_agents: "AI Agents",
-  reports: "Reports",
-  integrations: "Integrations",
-  notifications: "Notifications",
-  audit_trail: "Audit Trail",
-};
-
 const formSchema = z.object({
-  section: z.enum(BLUEPRINT_SECTIONS),
+  section: z.string().trim().min(1),
   name: z
     .string()
     .trim()
@@ -37,18 +21,22 @@ export function CreateSubfolderDialog({
   open,
   onOpenChange,
   blueprintId,
+  sections,
   fixedSection,
   parentFolderPath,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   blueprintId: string;
+  /** The blueprint's live sections (dynamic, not a fixed list) — powers the picker below when it isn't fixed. */
+  sections: { slug: string; label: string }[];
   /** When set, the section is fixed (nesting under an existing folder) rather than picked from a dropdown. */
-  fixedSection?: BlueprintSection;
+  fixedSection?: string;
   parentFolderPath: string | null;
 }) {
   const [serverError, setServerError] = useState<string | null>(null);
   const createFolder = useCreateBlueprintFolder(blueprintId);
+  const defaultSection = fixedSection ?? sections[0]?.slug ?? "";
   const {
     register,
     control,
@@ -57,7 +45,7 @@ export function CreateSubfolderDialog({
     formState: { errors, isSubmitting },
   } = useForm<FormValues>({
     resolver: zodResolver(formSchema),
-    defaultValues: { section: fixedSection ?? BLUEPRINT_SECTIONS[0] },
+    defaultValues: { section: defaultSection },
   });
 
   const onSubmit = async (values: FormValues) => {
@@ -68,7 +56,7 @@ export function CreateSubfolderDialog({
         parentFolderPath,
         name: values.name,
       });
-      reset({ section: fixedSection ?? BLUEPRINT_SECTIONS[0], name: "" });
+      reset({ section: defaultSection, name: "" });
       onOpenChange(false);
     } catch (err) {
       setServerError(err instanceof ApiError ? err.message : "Something went wrong");
@@ -98,10 +86,7 @@ export function CreateSubfolderDialog({
                 disabled={!!fixedSection}
                 value={field.value}
                 onValueChange={field.onChange}
-                options={BLUEPRINT_SECTIONS.map((slug) => ({
-                  value: slug,
-                  label: `${SECTION_LABELS[slug]} (${slug}/)`,
-                }))}
+                options={sections.map((s) => ({ value: s.slug, label: `${s.label} (${s.slug}/)` }))}
               />
             )}
           />
