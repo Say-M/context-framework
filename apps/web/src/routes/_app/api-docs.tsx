@@ -1,7 +1,7 @@
 import { createRoute } from "@tanstack/react-router";
 import { appLayoutRoute } from "../AppLayout";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5500";
 const DOCS_URL = `${API_URL}/api/v1/docs`;
 const OPENAPI_URL = `${API_URL}/api/v1/openapi.json`;
 

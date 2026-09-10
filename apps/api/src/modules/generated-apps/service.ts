@@ -69,7 +69,7 @@ export async function createGeneratedApp(input: CreateGeneratedAppInput, platfor
     blueprintId: input.blueprintId,
     createdBy: platformUserId,
     database: input.database,
-    frontendFramework: input.frontendFramework || "React + Vite + TanStack Query",
+    frontendFramework: input.frontendFramework || "React + Vite + TanStack Query + shadcn/ui",
     initialPrompt: input.prompt || "",
     status: "working",
   });

@@ -15,7 +15,7 @@ const generatedAppSchema = new Schema(
     blueprintId: { type: Schema.Types.ObjectId, ref: "AppBlueprint", required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "PlatformUser", required: true },
     database: { type: String, enum: ["mongodb", "postgres"], required: true },
-    frontendFramework: { type: String, default: "React + Vite + TanStack Query" },
+    frontendFramework: { type: String, default: "React + Vite + TanStack Query + shadcn/ui" },
     // Extra free-text instructions supplied at creation time, appended to
     // the generation prompt alongside the blueprint's specs.
     initialPrompt: { type: String, default: "" },

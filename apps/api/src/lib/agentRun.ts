@@ -2,10 +2,13 @@ import { query, type CanUseTool, type McpServerConfig } from "@anthropic-ai/clau
 import { publish } from "./socket";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
-const MAX_TURNS = 60;
+// Bash's install/CLI round-trips (bun install x2, shadcn init, shadcn add)
+// each cost their own turn on top of the file-writing work, so this needs
+// real headroom beyond what a Write/Edit-only run required.
+const MAX_TURNS = 100;
 const TIMEOUT_MS = 10 * 60 * 1000;
 
-export const BUILD_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep"] as const;
+export const BUILD_TOOLS = ["Read", "Write", "Edit", "Glob", "Grep", "Bash"] as const;
 export const READ_ONLY_TOOLS = ["Read", "Glob", "Grep"] as const;
 // Plan mode explores like Ask, but needs Write/Edit available in its
 // toolset for once a plan is approved, plus the built-in ExitPlanMode tool
@@ -13,7 +16,35 @@ export const READ_ONLY_TOOLS = ["Read", "Glob", "Grep"] as const;
 // has to be listed explicitly or the model can't call it at all.
 export const PLAN_TOOLS = [...BUILD_TOOLS, "ExitPlanMode"] as const;
 
-const MUTATING_TOOLS = new Set(["Write", "Edit", "NotebookEdit"]);
+// Bash counts as mutating for the plan-mode pre-approval gate below — same
+// as Write/Edit, it can't run until a plan is approved.
+const MUTATING_TOOLS = new Set(["Write", "Edit", "NotebookEdit", "Bash"]);
+
+// Bash is on the tool list for Build (and, post-approval, Plan) but only to
+// run the specific setup commands a scaffold actually needs — installing
+// declared deps, generating the Prisma client, and running the real
+// shadcn/ui CLI — never a general-purpose shell. Specs ultimately come from
+// user-authored content that flows into the agent's prompt, so this stays a
+// fixed allow-list rather than trusting the model's judgement about what's
+// safe to run.
+// `cd` is included so a command meant for frontend/ or backend/ doesn't
+// need shell chaining to get there (that's exactly what the metacharacter
+// check below exists to block) — restricted to a bare subdirectory name or
+// `..` so it can't wander outside the two known subdirectories.
+const SHELL_METACHARACTERS = /[;&|`$(){}<>\n]/;
+const ALLOWED_BASH_PREFIXES: RegExp[] = [
+  /^cd\s+\.\.$/,
+  /^cd\s+[\w-]+$/,
+  /^bun install\b/,
+  /^bunx?\s+prisma\s+generate\b/,
+  /^(bunx|npx)\s+shadcn@latest\s+(init|add)\b/,
+];
+
+function isAllowedBashCommand(command: string): boolean {
+  const trimmed = command.trim();
+  if (!trimmed || SHELL_METACHARACTERS.test(trimmed)) return false;
+  return ALLOWED_BASH_PREFIXES.some((prefix) => prefix.test(trimmed));
+}
 
 function summarizeToolUse(name: string, input: unknown): string {
   const record = (input && typeof input === "object" ? input : {}) as Record<string, unknown>;
@@ -57,7 +88,10 @@ export interface RunAgentQueryOptions {
    * NotebookEdit) — custom MCP tools are NOT auto-approved by it and need
    * to be listed here explicitly, or the model's tool call is silently
    * denied and it falls back to describing what it would have done in
-   * plain text instead.
+   * plain text instead. Bash is a third case: `acceptEdits` doesn't cover
+   * it either, but it's never appropriate to blanket-allow via this list —
+   * see the `canUseTool` allow-list further down instead, which approves
+   * it command-by-command.
    */
   allowedTools?: readonly string[];
   /**
@@ -133,9 +167,10 @@ export async function runAgentQuery(
   // correctness here doesn't depend on exactly how the CLI enforces the
   // mode internally.
   let planApproved = false;
-  const canUseTool: CanUseTool | undefined = onPlanReady
+  const needsCanUseTool = Boolean(onPlanReady) || tools.includes("Bash");
+  const canUseTool: CanUseTool | undefined = needsCanUseTool
     ? async (toolName, input) => {
-        if (toolName === "ExitPlanMode") {
+        if (onPlanReady && toolName === "ExitPlanMode") {
           const plan = typeof input.plan === "string" ? input.plan : "";
           disarmTimeout();
           try {
@@ -156,11 +191,21 @@ export async function runAgentQuery(
             armTimeout();
           }
         }
-        if (!planApproved && MUTATING_TOOLS.has(toolName)) {
+        if (onPlanReady && !planApproved && MUTATING_TOOLS.has(toolName)) {
           return {
             behavior: "deny",
             message: "Still in planning mode — call ExitPlanMode with your plan before making changes.",
           };
+        }
+        if (toolName === "Bash") {
+          const command = typeof input.command === "string" ? input.command : "";
+          if (!isAllowedBashCommand(command)) {
+            return {
+              behavior: "deny",
+              message:
+                "Command not permitted here. Only `cd <subdir>`/`cd ..`, `bun install`, `bunx prisma generate`, and `bunx/npx shadcn@latest init`/`add` are allowed — no other commands, and no chaining with ;, &&, |, backticks, or $().",
+            };
+          }
         }
         return { behavior: "allow", updatedInput: input };
       }

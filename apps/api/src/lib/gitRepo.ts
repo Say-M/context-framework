@@ -52,7 +52,11 @@ export async function commitWorkingTree(dir: string, message: string): Promise<s
 }
 
 export async function listCommits(dir: string): Promise<GitCommit[]> {
-  const result = await $`git log --format=${GIT_LOG_FORMAT}`.cwd(dir).quiet();
+  // `git log` exits 128 on a freshly-`init`'d repo with no commits yet (e.g.
+  // while the generating agent is still working on its first commit) — that's
+  // "no versions yet", not a failure, so don't let it throw.
+  const result = await $`git log --format=${GIT_LOG_FORMAT}`.cwd(dir).quiet().nothrow();
+  if (result.exitCode !== 0) return [];
   const text = result.stdout.toString().trim();
   if (!text) return [];
   return text.split("\n").map((line) => {

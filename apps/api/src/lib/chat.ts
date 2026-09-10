@@ -39,11 +39,11 @@ ${task}
 # Constraints
 - You have ${
     mode === "ask"
-      ? "Read, Glob, and Grep"
+      ? "Read, Glob, and Grep tools only — no shell access."
       : mode === "plan"
-        ? "Read, Glob, Grep, and ExitPlanMode (Write/Edit are unavailable until your plan is approved)"
-        : "Read, Write, Edit, Glob, and Grep"
-  } tools only — no shell access. You cannot run \`bun install\`, \`prisma generate\`, or any other command.
+        ? "Read, Glob, Grep, and ExitPlanMode (Write/Edit/Bash are unavailable until your plan is approved)."
+        : "Read, Write, Edit, Glob, Grep, and Bash — but Bash only runs a fixed set of commands: `cd <subdir>`/`cd ..`, `bun install`, `bunx prisma generate`, and `bunx/npx shadcn@latest init`/`add`. Anything else, including chaining with `;`, `&&`, `|`, backticks, or `$()`, is denied — don't waste turns trying other commands."
+  }
 - Do not initialize a git repository or attempt to commit — that happens outside your control after you finish.
 - Stay inside the current directory.
 `;

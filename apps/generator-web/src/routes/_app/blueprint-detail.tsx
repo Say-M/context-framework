@@ -75,7 +75,7 @@ function BlueprintDetailPage() {
         <FormField label="Frontend framework (optional)" htmlFor="framework">
           <Input
             id="framework"
-            placeholder="React + Vite + TanStack Query"
+            placeholder="React + Vite + TanStack Query + shadcn/ui"
             value={frontendFramework}
             onChange={(e) => setFrontendFramework(e.target.value)}
           />

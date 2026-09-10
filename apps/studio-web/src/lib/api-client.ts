@@ -1,4 +1,4 @@
-export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:4000";
+export const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:5500";
 
 // Access token lives only in memory (never localStorage) — PlatformAuthContext
 // is the sole writer via setAccessToken, populated at signup/login/refresh.
