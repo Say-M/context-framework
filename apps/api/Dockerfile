@@ -1,9 +1,15 @@
 # syntax=docker/dockerfile:1
 
 # ---------------------------------------------------------------------------
-# base: shared starting point for every stage below.
+# base: shared starting point for every stage below. Debian-based, not
+# -alpine: @anthropic-ai/claude-agent-sdk ships its native CLI binary as
+# separate per-platform optionalDependencies, split further into glibc vs
+# musl builds (e.g. claude-agent-sdk-linux-arm64 vs
+# -linux-arm64-musl) — Alpine's musl libc landed on the wrong one and failed
+# at runtime with "Native CLI binary ... not found". Debian's glibc avoids
+# that split entirely.
 # ---------------------------------------------------------------------------
-FROM oven/bun:1.3-alpine AS base
+FROM oven/bun:1.3 AS base
 WORKDIR /app
 
 # ---------------------------------------------------------------------------
