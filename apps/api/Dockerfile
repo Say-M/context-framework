@@ -50,7 +50,14 @@ EXPOSE 5500
 CMD ["bun", "run", "dev:docker"]
 
 # ---------------------------------------------------------------------------
-# builder: bundle the API into a single production file.
+# builder: bundle the API into a single production file. The build script
+# (see apps/api/package.json) marks @anthropic-ai/claude-agent-sdk external —
+# inlining it breaks its own native-CLI-binary lookup, which resolves its
+# platform package (e.g. claude-agent-sdk-linux-arm64) relative to its own
+# import.meta.url. Bundled, that resolves against dist/index.js's location
+# instead of the SDK's real install path, so the lookup fails even though the
+# platform package is genuinely installed — surfacing as "Native CLI binary
+# for <platform> not found" at runtime, not at build time.
 # ---------------------------------------------------------------------------
 FROM source AS builder
 WORKDIR /app/apps/api

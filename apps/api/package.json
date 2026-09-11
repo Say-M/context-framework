@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "bun run --watch src/index.ts",
     "dev:docker": "nodemon --legacy-watch --watch src --watch ../../packages/db-models/src --watch ../../packages/shared-schemas/src --ext ts --exec \"bun run src/index.ts\"",
-    "build": "bun build src/index.ts --outdir dist --target bun",
+    "build": "bun build src/index.ts --outdir dist --target bun --external @anthropic-ai/claude-agent-sdk",
     "start": "bun run dist/index.js",
     "check-types": "tsc --noEmit",
     "test": "bun test"

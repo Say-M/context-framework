@@ -51,7 +51,16 @@ const envSchema = z.object({
   // degrades gracefully (a normal tool-error result, not a boot crash) when
   // this is unset, since image generation is one capability among several,
   // not something the whole platform depends on.
-  GOOGLE_API_KEY: z.string().min(1).optional(),
+  // Preprocessed because "unset" doesn't always mean absent from
+  // process.env: docker-compose.dev.yml's `${GOOGLE_API_KEY:-}` fallback
+  // materializes an unset var as an empty string, not a missing key, and
+  // `.optional()` alone only accepts `undefined` — an empty string still
+  // fails `.min(1)` and crashes boot under Docker even though the same var
+  // being genuinely absent (the non-Docker case) works fine.
+  GOOGLE_API_KEY: z.preprocess(
+    (value) => (value === "" ? undefined : value),
+    z.string().min(1).optional(),
+  ),
 });
 
 // Parsed once at module load (first import, i.e. app boot) and never again —
