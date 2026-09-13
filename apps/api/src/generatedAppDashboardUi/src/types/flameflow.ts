@@ -1,0 +1,12 @@
+export const sections = ["overview","users","database","analytics","integrations","security","agents","workflows","logs","api","settings","mcp"] as const;
+export type Section = (typeof sections)[number];
+export type ProjectConfig = { id:string; name:string; slug:string; description:string; createdAt:string; visibility:"public"|"private"|"team"|"restricted"; isFavorite:boolean; badgeVisible:boolean; previewUrl:string; environment:"development"|"staging"|"production"; deploymentStatus:"deployed"|"building"|"failed"|"not_deployed"; backendUrl?:string };
+export type UserRole = "Admin"|"Manager"|"Member"|"Viewer";
+export type ProjectUser = { id:string; name:string; email:string; role:UserRole; status:"Active"|"Pending"|"Inactive"; lastActive:string; joined:string };
+export type Integration = { id:string; name:string; category:string; description:string; connected:boolean };
+export type Agent = { id:string; name:string; description:string; enabled:boolean; lastRun:string; runs:number; permissions:string[] };
+export type Workflow = { id:string; name:string; trigger:string; enabled:boolean; lastRun:string; steps:string[] };
+export type LogEntry = { id:string; time:string; severity:"Info"|"Success"|"Warning"|"Error"; source:string; message:string; requestId:string };
+export type McpServer = { id:string; name:string; description:string; connected:boolean; tools:number; synced:string };
+export type Collaborator = { id:string; name:string; email:string; role:"Viewer"|"Editor"; status:string };
+export type FlameflowState = { project:ProjectConfig; users:ProjectUser[]; integrations:Integration[]; agents:Agent[]; workflows:Workflow[]; logs:LogEntry[]; mcp:McpServer[]; collaborators:Collaborator[] };

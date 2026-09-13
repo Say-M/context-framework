@@ -4,6 +4,7 @@ import { randomBytes } from "node:crypto";
 import path from "node:path";
 
 const TEMPLATE_DIR = path.join(import.meta.dir, "..", "generatedAppDashboard");
+const UI_TEMPLATE_DIR = path.join(import.meta.dir, "..", "generatedAppDashboardUi");
 const SECRET_KEY = "DASHBOARD_SESSION_SECRET";
 const MOUNT_IMPORT = 'import { mountDashboard } from "./dashboard/server";';
 const MOUNT_CALL = "mountDashboard(app);";
@@ -29,7 +30,14 @@ async function ensureEnvSecret(backendDir: string): Promise<void> {
 async function ensureGitignore(backendDir: string): Promise<void> {
   const gitignorePath = path.join(backendDir, ".gitignore");
   const existing = existsSync(gitignorePath) ? await readFile(gitignorePath, "utf-8") : "";
-  const missing = ["dashboard.db", "dashboard.db-*"].filter(
+  const missing = [
+    "dashboard.db",
+    "dashboard.db-*",
+    "src/dashboard/ui/node_modules",
+    "src/dashboard/ui/dist",
+    "src/dashboard/ui/.output",
+    "src/dashboard/ui/.vite",
+  ].filter(
     (line) => !existing.split("\n").some((l) => l.trim() === line),
   );
   if (missing.length === 0) return;
@@ -73,7 +81,11 @@ async function patchIndexTs(backendDir: string, generatedAppId: string): Promise
   await writeFile(indexPath, content);
 }
 
-/** Copies the vendored dashboard template and wires it into a generated repo. See lib/generation.ts and lib/chat.ts for call sites. */
+/**
+ * Copies the vendored dashboard access-auth API and the vendored Flameflow
+ * Dashboard Hub UI into a generated repo, and wires the auth API into the
+ * generated backend. See lib/generation.ts and lib/chat.ts for call sites.
+ */
 export async function injectDashboard(dir: string, generatedAppId: string): Promise<void> {
   const backendDir = path.join(dir, "backend");
   if (!existsSync(backendDir)) return; // nothing to inject into yet
@@ -81,6 +93,10 @@ export async function injectDashboard(dir: string, generatedAppId: string): Prom
   const destDir = path.join(backendDir, "src", "dashboard");
   await mkdir(destDir, { recursive: true });
   await cp(TEMPLATE_DIR, destDir, { recursive: true });
+
+  const uiDestDir = path.join(destDir, "ui");
+  await mkdir(uiDestDir, { recursive: true });
+  await cp(UI_TEMPLATE_DIR, uiDestDir, { recursive: true });
 
   await ensureEnvSecret(backendDir);
   await ensureGitignore(backendDir);

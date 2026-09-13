@@ -32,12 +32,17 @@ function readEmail(body: Record<string, unknown>): string {
 }
 
 /**
- * Mounts the shared, non-agent-written admin dashboard at /__dashboard on
- * an already-built Hono app. Its own auth (bun:sqlite, see store.ts) is
- * entirely self-contained per deployment — the first person to open the
- * dashboard on a fresh instance sets an email+password and becomes its
- * owner; nothing here ever calls back to BISMO. Data reads/writes are not
- * proxied through this router — the dashboard's frontend calls the app's
+ * Mounts the shared, non-agent-written dashboard access-authentication API
+ * at /__dashboard on an already-built Hono app. Its own auth (bun:sqlite,
+ * see store.ts) is entirely self-contained per deployment — the first
+ * person to open the dashboard on a fresh instance sets an email+password
+ * and becomes its owner; nothing here ever calls back to BISMO. This is an
+ * API only — the dashboard UI itself (Flameflow, vendored into
+ * backend/src/dashboard/ui) runs as its own process and calls these
+ * /__dashboard/api/* endpoints (proxied same-origin in dev, see its
+ * vite.config.ts) rather than being served by this router. Data
+ * reads/writes for the generated app's own entities are not proxied
+ * through this router either — the dashboard's frontend calls the app's
  * own real /api/<entity> endpoints directly, so this never bypasses
  * whatever validation the generated routes already enforce.
  */
@@ -56,7 +61,6 @@ export function mountDashboard(app: Hono) {
   const secret: string = rawSecret;
 
   const schemaPath = path.join(import.meta.dir, "..", "..", "prisma", "schema.prisma");
-  const publicDir = path.join(import.meta.dir, "public");
 
   async function requireSession(c: Context): Promise<DashboardUserRow | null> {
     const token = getCookie(c, SESSION_COOKIE);
@@ -88,13 +92,6 @@ export function mountDashboard(app: Hono) {
       maxAge: SESSION_TTL_SECONDS,
     });
   }
-
-  const servePage = async () => {
-    const file = Bun.file(path.join(publicDir, "index.html"));
-    return new Response(file, { headers: { "Content-Type": "text/html; charset=utf-8" } });
-  };
-  router.get("/", servePage);
-  router.get("/accept-invite/:token", servePage);
 
   router.get("/api/session", async (c) => {
     const user = await requireSession(c);
@@ -154,7 +151,8 @@ export function mountDashboard(app: Hono) {
     if (findUserByEmail(email)) return c.json({ error: "That email is already a dashboard user." }, 409);
     const token = randomBytes(24).toString("hex");
     createInvite(email, token, Date.now() + INVITE_TTL_MS);
-    return c.json({ inviteUrl: `/__dashboard/accept-invite/${token}` }, 201);
+    const uiBaseUrl = process.env.DASHBOARD_UI_URL ?? "http://localhost:5173";
+    return c.json({ inviteUrl: `${uiBaseUrl}/accept-invite/${token}` }, 201);
   });
 
   router.delete("/api/users/:id", async (c) => {
