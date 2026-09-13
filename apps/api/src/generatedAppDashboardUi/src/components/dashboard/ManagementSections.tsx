@@ -13,9 +13,31 @@ import { Progress } from "@/components/ui/progress";
 import { Select,SelectContent,SelectItem,SelectTrigger,SelectValue } from "@/components/ui/select";
 import { Dialog,DialogContent,DialogDescription,DialogHeader,DialogTitle } from "@/components/ui/dialog";
 import { ChartContainer,ChartTooltip,ChartTooltipContent } from "@/components/ui/chart";
-import { collections,expenses } from "@/data/flameflow";
 import { useProject } from "@/context/ProjectContext";
 import { Metric,PageHeader,Panel,PanelTitle,Status } from "./common";
+import { createRecord, deleteRecord, fetchRecords, fetchSchema, type SchemaField, type SchemaModel } from "@/lib/backendApi";
+
+function formatCell(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "—";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
+}
+
+function isEditableField(field: SchemaField): boolean {
+  return !field.isId && !field.isRelation && !field.isList;
+}
+
+function coerceFormValues(fields: SchemaField[], values: Record<string, string>): Record<string, unknown> {
+  const out: Record<string, unknown> = {};
+  for (const field of fields) {
+    const raw = values[field.name];
+    if (raw === undefined || raw === "") continue;
+    if (["Int", "Float", "Decimal", "BigInt"].includes(field.type)) out[field.name] = Number(raw);
+    else if (field.type === "Boolean") out[field.name] = raw === "true";
+    else out[field.name] = raw;
+  }
+  return out;
+}
 interface DashboardAccessUser { id: number; email: string; role: "owner" | "member" }
 
 export function UsersSection() {
@@ -175,7 +197,210 @@ export function UsersSection() {
     </div>
   );
 }
-export function DatabaseSection(){const [selected,setSelected]=useState(collections[0] ?? {name:"Expenses",description:"Submitted project expenses",records:0,updated:"Never"});const [query,setQuery]=useState("SELECT * FROM expenses LIMIT 10;");const [ran,setRan]=useState(false);return <div className="space-y-7"><PageHeader title="Simulated Database" subtitle="Inspect collections, schemas, and records for NGO Ledger." action={<Status tone="warning">Mock data — no real database connection</Status>}/><div className="grid gap-4 sm:grid-cols-4"><Metric label="Connection" value="Healthy" detail="Simulated"/><Metric label="Database type" value="Simulated"/><Metric label="Collections" value={String(collections.length)}/><Metric label="Total records" value="1,203" detail="Synced 5 min ago"/></div><div className="grid gap-5 xl:grid-cols-[310px_minmax(0,1fr)]"><Panel><PanelTitle title="Collections" description="Select a collection"/><div className="mt-4 space-y-1">{collections.map(c=><Button variant={selected.name===c.name?"secondary":"ghost"} className="h-auto w-full justify-between py-3" onClick={()=>setSelected(c)} key={c.name}><span className="text-left"><span className="block">{c.name}</span><span className="block text-xs font-normal text-muted-foreground">{c.records} records</span></span><ChevronRight/></Button>)}</div></Panel><div className="space-y-5"><Panel><PanelTitle title={`${selected.name} schema`} description={selected.description}/><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[620px] text-sm"><thead><tr className="border-b text-left text-xs text-muted-foreground"><th className="py-3">Field</th><th>Type</th><th>Required</th><th>Example</th></tr></thead><tbody>{[["id","string","Yes","EXP-2048"],["projectId","string","Yes","PRJ-14"],["employeeName","string","Yes","Maya Rahman"],["amount","number","Yes","1240.00"],["currency","string","Yes","USD"],["category","string","Yes","Field supplies"],["status","enum","Yes","Approved"],["submittedAt","datetime","Yes","2026-09-13"],["approvedBy","string","No","Admin User"]].map((r,i)=><tr className="border-b last:border-0" key={r[0]}><td className="py-3 font-mono text-xs">{r[0]}{i===0&&<KeyRound className="ml-2 inline size-3 text-warning"/>}</td><td>{r[1]}</td><td>{r[2]}</td><td className="text-muted-foreground">{r[3]}</td></tr>)}</tbody></table></div></Panel><Panel><PanelTitle title="Data preview" description="Local demonstration records" action={<Button size="sm" onClick={()=>toast.success("Record form opened in prototype")}><Plus/> Add record</Button>}/><div className="mt-4 overflow-x-auto"><table className="w-full min-w-[760px] text-sm"><thead><tr className="border-b text-left text-xs text-muted-foreground">{["ID","Project","Employee","Amount","Category","Status"].map(x=><th className="py-3 pr-4" key={x}>{x}</th>)}</tr></thead><tbody>{expenses.map(r=><tr className="border-b last:border-0" key={r.id}>{Object.values(r).map((v,i)=><td className="py-3 pr-4" key={i}>{i===5?<Status tone={v==="Approved"?"success":"warning"}>{v}</Status>:v}</td>)}</tr>)}</tbody></table></div></Panel></div></div><Panel><PanelTitle title="Query console" description="Simulated query — no real database execution."/><Textarea value={query} onChange={e=>setQuery(e.target.value.slice(0,500))} className="mt-4 min-h-28 font-mono text-xs"/><div className="mt-3 flex items-center gap-3"><Button onClick={()=>{setRan(true);toast.success("Simulated query completed")}}><DatabaseIcon/> Run query</Button>{ran&&<span className="text-xs text-success">Completed in 24ms · 4 rows</span>}</div>{ran&&<pre className="mt-4 overflow-x-auto rounded-md bg-code p-4 text-xs text-code-foreground">{JSON.stringify(expenses.slice(0,2),null,2)}</pre>}</Panel></div>}
+export function DatabaseSection() {
+  const queryClient = useQueryClient();
+  const [selectedModel, setSelectedModel] = useState<SchemaModel | null>(null);
+  const [addOpen, setAddOpen] = useState(false);
+  const [formValues, setFormValues] = useState<Record<string, string>>({});
+
+  const schemaQuery = useQuery({ queryKey: ["backend-schema"], queryFn: fetchSchema });
+  const models = schemaQuery.data ?? [];
+  const activeModel = selectedModel ?? models[0] ?? null;
+
+  const recordsQuery = useQuery({
+    queryKey: ["backend-records", activeModel?.apiPath],
+    queryFn: () => fetchRecords(activeModel!.apiPath),
+    enabled: Boolean(activeModel),
+  });
+  const records = recordsQuery.data ?? [];
+  const editableFields = (activeModel?.fields ?? []).filter(isEditableField);
+  const columns = records[0] ? Object.keys(records[0]) : editableFields.map((f) => f.name);
+
+  const createMutation = useMutation({
+    mutationFn: (data: Record<string, unknown>) => createRecord(activeModel!.apiPath, data),
+    onSuccess: () => {
+      toast.success("Record created");
+      queryClient.invalidateQueries({ queryKey: ["backend-records", activeModel?.apiPath] });
+      setAddOpen(false);
+      setFormValues({});
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: (id: string | number) => deleteRecord(activeModel!.apiPath, id),
+    onSuccess: () => {
+      toast.success("Record deleted");
+      queryClient.invalidateQueries({ queryKey: ["backend-records", activeModel?.apiPath] });
+    },
+    onError: (err: Error) => toast.error(err.message),
+  });
+
+  return (
+    <div className="space-y-7">
+      <PageHeader title="Database" subtitle="Browse this project's real data model and records." />
+      <div className="grid gap-4 sm:grid-cols-3">
+        <Metric label="Connection" value={schemaQuery.isError ? "Unavailable" : "Healthy"} />
+        <Metric label="Entities" value={String(models.length)} />
+        {activeModel ? (
+          <Metric label="Records" value={String(records.length)} detail={activeModel.name} />
+        ) : (
+          <Metric label="Records" value="—" />
+        )}
+      </div>
+      <div className="grid gap-5 xl:grid-cols-[310px_minmax(0,1fr)]">
+        <Panel>
+          <PanelTitle title="Entities" description="From the backend's Prisma schema" />
+          <div className="mt-4 space-y-1">
+            {models.map((m) => (
+              <Button
+                variant={activeModel?.name === m.name ? "secondary" : "ghost"}
+                className="h-auto w-full justify-between py-3"
+                onClick={() => setSelectedModel(m)}
+                key={m.name}
+              >
+                <span className="text-left">
+                  <span className="block">{m.name}</span>
+                  <span className="block text-xs font-normal text-muted-foreground">{m.apiPath}</span>
+                </span>
+                <ChevronRight />
+              </Button>
+            ))}
+            {models.length === 0 && !schemaQuery.isLoading && (
+              <p className="py-4 text-center text-sm text-muted-foreground">No entities found yet.</p>
+            )}
+          </div>
+        </Panel>
+        <div className="space-y-5">
+          <Panel>
+            <PanelTitle
+              title={activeModel ? `${activeModel.name} schema` : "Schema"}
+              description="Fields parsed from the backend's schema.prisma"
+            />
+            <div className="mt-4 overflow-x-auto">
+              <table className="w-full min-w-[560px] text-sm">
+                <thead>
+                  <tr className="border-b text-left text-xs text-muted-foreground">
+                    <th className="py-3">Field</th>
+                    <th>Type</th>
+                    <th>Required</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(activeModel?.fields ?? []).map((f) => (
+                    <tr className="border-b last:border-0" key={f.name}>
+                      <td className="py-3 font-mono text-xs">
+                        {f.name}
+                        {f.isId && <KeyRound className="ml-2 inline size-3 text-warning" />}
+                      </td>
+                      <td>
+                        {f.type}
+                        {f.isList ? "[]" : ""}
+                      </td>
+                      <td>{f.isOptional ? "No" : "Yes"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </Panel>
+          <Panel>
+            <PanelTitle
+              title="Records"
+              description={recordsQuery.isError ? (recordsQuery.error as Error).message : "Live data from the backend"}
+              action={
+                <Button size="sm" disabled={!activeModel} onClick={() => setAddOpen(true)}>
+                  <Plus /> Add record
+                </Button>
+              }
+            />
+            <div className="mt-4 overflow-x-auto">
+              {recordsQuery.isLoading ? (
+                <p className="py-8 text-center text-sm text-muted-foreground">Loading records…</p>
+              ) : (
+                <table className="w-full min-w-[640px] text-sm">
+                  <thead>
+                    <tr className="border-b text-left text-xs text-muted-foreground">
+                      {columns.map((c) => (
+                        <th className="py-3 pr-4" key={c}>
+                          {c}
+                        </th>
+                      ))}
+                      <th className="py-3 pr-4">Actions</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {records.map((r, i) => (
+                      <tr className="border-b last:border-0" key={String(r["id"] ?? i)}>
+                        {columns.map((c) => (
+                          <td className="py-3 pr-4" key={c}>
+                            {formatCell(r[c])}
+                          </td>
+                        ))}
+                        <td className="py-3 pr-4">
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            aria-label="Delete record"
+                            disabled={deleteMutation.isPending}
+                            onClick={() => deleteMutation.mutate(r["id"] as string | number)}
+                          >
+                            <Trash2 />
+                          </Button>
+                        </td>
+                      </tr>
+                    ))}
+                    {records.length === 0 && (
+                      <tr>
+                        <td colSpan={columns.length + 1} className="py-8 text-center text-muted-foreground">
+                          No records yet
+                        </td>
+                      </tr>
+                    )}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </Panel>
+        </div>
+      </div>
+      <Dialog open={addOpen} onOpenChange={setAddOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add {activeModel?.name} record</DialogTitle>
+            <DialogDescription>Creates a real record via {activeModel?.apiPath}.</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            {editableFields.map((f) => (
+              <div key={f.name}>
+                <Label htmlFor={`field-${f.name}`}>
+                  {f.name}
+                  {f.isOptional ? "" : " *"}
+                </Label>
+                <Input
+                  id={`field-${f.name}`}
+                  className="mt-1.5"
+                  value={formValues[f.name] ?? ""}
+                  onChange={(e) => setFormValues((v) => ({ ...v, [f.name]: e.target.value }))}
+                />
+              </div>
+            ))}
+            {editableFields.length === 0 && (
+              <p className="text-sm text-muted-foreground">This entity has no editable fields.</p>
+            )}
+          </div>
+          <Button
+            className="w-full"
+            disabled={!activeModel || createMutation.isPending}
+            onClick={() => createMutation.mutate(coerceFormValues(editableFields, formValues))}
+          >
+            {createMutation.isPending ? "Creating…" : "Create record"}
+          </Button>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
 const trend=[{day:"Sep 7",visitors:620,sessions:790},{day:"Sep 8",visitors:710,sessions:920},{day:"Sep 9",visitors:680,sessions:860},{day:"Sep 10",visitors:840,sessions:1050},{day:"Sep 11",visitors:920,sessions:1180},{day:"Sep 12",visitors:1080,sessions:1320},{day:"Sep 13",visitors:1010,sessions:1270}];
 export function AnalyticsSection(){const [range,setRange]=useState("30");return <div className="space-y-7"><PageHeader title="Analytics" subtitle="Simulated engagement and traffic for NGO Ledger." action={<Select value={range} onValueChange={setRange}><SelectTrigger className="w-36"><SelectValue/></SelectTrigger><SelectContent><SelectItem value="7">Last 7 days</SelectItem><SelectItem value="30">Last 30 days</SelectItem><SelectItem value="90">Last 90 days</SelectItem></SelectContent></Select>}/><div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">{[["Visitors","24,892","+12.4%"],["Sessions","31,604","+9.8%"],["Page views","74,210","+15.2%"],["Conversion","6.8%","+0.7%"],["Returning users","41.2%","+3.1%"],["Avg. session","4m 18s","+22s"]].map(x=><Metric key={String(x[0])} label={String(x[0])} value={String(x[1])} detail={String(x[2])}/>)}</div><div className="grid gap-5 xl:grid-cols-[2fr_1fr]"><Panel><PanelTitle title="Visitors and sessions" description={`Traffic over the last ${range} days`}/><ChartContainer className="mt-5 h-[300px] w-full" config={{visitors:{label:"Visitors",color:"var(--chart-1)"},sessions:{label:"Sessions",color:"var(--chart-2)"}}}><AreaChart data={trend} accessibilityLayer><CartesianGrid vertical={false}/><XAxis dataKey="day" tickLine={false} axisLine={false}/><YAxis tickLine={false} axisLine={false}/><ChartTooltip content={<ChartTooltipContent/>}/><Area type="monotone" dataKey="sessions" stroke="var(--color-sessions)" fill="var(--color-sessions)" fillOpacity={.12}/><Area type="monotone" dataKey="visitors" stroke="var(--color-visitors)" fill="var(--color-visitors)" fillOpacity={.18}/></AreaChart></ChartContainer></Panel><Panel><PanelTitle title="Device breakdown" description="Sessions by device"/><ChartContainer className="mx-auto mt-5 h-[300px] max-w-[320px]" config={{desktop:{label:"Desktop",color:"var(--chart-1)"},mobile:{label:"Mobile",color:"var(--chart-2)"},tablet:{label:"Tablet",color:"var(--chart-4)"}}}><PieChart accessibilityLayer><ChartTooltip content={<ChartTooltipContent hideLabel/>}/><Pie data={[{name:"Desktop",value:56,color:"var(--chart-1)"},{name:"Mobile",value:37,color:"var(--chart-2)"},{name:"Tablet",value:7,color:"var(--chart-4)"}]} dataKey="value" nameKey="name" innerRadius={55}>{["a","b","c"].map((x,i)=><Cell key={x} fill={["var(--chart-1)","var(--chart-2)","var(--chart-4)"][i] ?? "var(--chart-1)"}/>)}</Pie></PieChart></ChartContainer></Panel></div><div className="grid gap-5 lg:grid-cols-3">{[["Traffic sources",["Direct · 42%","Search · 31%","Referral · 18%","Social · 9%"]],["Top pages",["/dashboard · 8.2K","/expenses · 6.4K","/reports · 4.9K","/projects · 3.1K"]],["Countries",["Bangladesh · 38%","United Kingdom · 19%","United States · 16%","Kenya · 11%"]]].map(([t,rows])=><Panel key={String(t)}><PanelTitle title={String(t)}/><div className="mt-4 space-y-3">{(rows as string[]).map(r=><div className="flex items-center justify-between border-b pb-3 text-sm last:border-0" key={r}><span>{r.split(" · ")[0]??r}</span><span className="text-muted-foreground">{r.split(" · ")[1]??""}</span></div>)}</div></Panel>)}</div></div>}
 export function IntegrationsSection(){const {state,update}=useProject();const [q,setQ]=useState("");const [category,setCategory]=useState("All");const rows=state.integrations.filter(x=>x.name.toLowerCase().includes(q.toLowerCase())&&(category==="All"||x.category===category));return <div className="space-y-7"><PageHeader title="Integrations" subtitle="Explore simulated connections for this project."/><div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_220px]"><Input value={q} onChange={e=>setQ(e.target.value)} placeholder="Search integrations"/><Select value={category} onValueChange={setCategory}><SelectTrigger><SelectValue/></SelectTrigger><SelectContent>{["All","Payments","Authentication","Analytics","Storage","Communication","Developer tools"].map(x=><SelectItem value={x} key={x}>{x}</SelectItem>)}</SelectContent></Select></div><div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">{rows.map(x=><Panel key={x.id}><div className="flex items-start justify-between"><div className="grid size-10 place-items-center rounded-md bg-muted"><Globe className="size-5"/></div><Status tone={x.connected?"success":"neutral"}>{x.connected?"Connected":"Not connected"}</Status></div><h2 className="mt-5 font-semibold">{x.name}</h2><p className="mt-1 min-h-10 text-sm text-muted-foreground">{x.description}</p><p className="mt-3 text-xs text-muted-foreground">{x.category}</p><div className="mt-5 flex gap-2"><Button size="sm" variant={x.connected?"outline":"default"} onClick={()=>{update("integrations",state.integrations.map(i=>i.id===x.id?{...i,connected:!i.connected}:i));toast.success(x.connected?`${x.name} disconnected`:`${x.name} connected`)}}>{x.connected?"Disconnect":"Connect"}</Button>{x.connected&&<Button size="sm" variant="ghost" onClick={()=>toast.info(`${x.name} configuration opened`)}>Configure</Button>}</div></Panel>)}</div></div>}

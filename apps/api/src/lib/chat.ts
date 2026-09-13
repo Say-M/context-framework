@@ -26,7 +26,7 @@ Make the requested change against this existing repo. Explore it first (Glob/Rea
   return `You are continuing work on an application that already exists — the current directory already contains real files.
 
 # Fixed stack (still applies — do not substitute anything)
-Backend: Bun + Hono, ORM: Prisma. Frontend: whatever this repo already uses — check its package.json rather than guessing.
+Backend: Bun + Hono, ORM: Prisma. No frontend — this is an API/agent backend only; if this repo already has agents, they use Google ADK (\`@google/adk\`) — check its package.json rather than guessing.
 
 # Conversation so far
 ${historyBlock || "(this is the first message)"}
@@ -42,7 +42,7 @@ ${task}
       ? "Read, Glob, and Grep tools only — no shell access."
       : mode === "plan"
         ? "Read, Glob, Grep, and ExitPlanMode (Write/Edit/Bash are unavailable until your plan is approved)."
-        : "Read, Write, Edit, Glob, Grep, and Bash — but Bash only runs a fixed set of commands: `cd <subdir>`/`cd ..`, `bun install`, `bunx prisma generate`, and `bunx/npx shadcn@latest init`/`add`. Anything else, including chaining with `;`, `&&`, `|`, backticks, or `$()`, is denied — don't waste turns trying other commands."
+        : "Read, Write, Edit, Glob, Grep, and Bash — but Bash only runs a fixed set of commands: `cd <subdir>`/`cd ..`, `bun install`, `bunx prisma generate`, and `bun add @google/adk`. Anything else, including chaining with `;`, `&&`, `|`, backticks, or `$()`, is denied — don't waste turns trying other commands."
   }
 - Do not initialize a git repository or attempt to commit — that happens outside your control after you finish.
 - Stay inside the current directory.

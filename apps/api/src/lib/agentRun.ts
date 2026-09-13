@@ -2,9 +2,9 @@ import { query, type CanUseTool, type McpServerConfig } from "@anthropic-ai/clau
 import { publish } from "./socket";
 
 const DEFAULT_MODEL = "claude-sonnet-5";
-// Bash's install/CLI round-trips (bun install x2, shadcn init, shadcn add)
-// each cost their own turn on top of the file-writing work, so this needs
-// real headroom beyond what a Write/Edit-only run required.
+// Bash's install/CLI round-trips (bun install, prisma generate, adding the
+// ADK SDK) each cost their own turn on top of the file-writing work, so this
+// needs real headroom beyond what a Write/Edit-only run required.
 const MAX_TURNS = 100;
 const TIMEOUT_MS = 10 * 60 * 1000;
 
@@ -22,22 +22,22 @@ const MUTATING_TOOLS = new Set(["Write", "Edit", "NotebookEdit", "Bash"]);
 
 // Bash is on the tool list for Build (and, post-approval, Plan) but only to
 // run the specific setup commands a scaffold actually needs — installing
-// declared deps, generating the Prisma client, and running the real
-// shadcn/ui CLI — never a general-purpose shell. Specs ultimately come from
+// declared deps, generating the Prisma client, and adding the Google ADK SDK
+// when an app includes agents — never a general-purpose shell. Specs ultimately come from
 // user-authored content that flows into the agent's prompt, so this stays a
 // fixed allow-list rather than trusting the model's judgement about what's
 // safe to run.
-// `cd` is included so a command meant for frontend/ or backend/ doesn't
-// need shell chaining to get there (that's exactly what the metacharacter
-// check below exists to block) — restricted to a bare subdirectory name or
-// `..` so it can't wander outside the two known subdirectories.
+// `cd` is included so a command meant for backend/ (or a subdirectory of it)
+// doesn't need shell chaining to get there (that's exactly what the
+// metacharacter check below exists to block) — restricted to a bare
+// subdirectory name or `..` so it can't wander outside the working tree.
 const SHELL_METACHARACTERS = /[;&|`$(){}<>\n]/;
 const ALLOWED_BASH_PREFIXES: RegExp[] = [
   /^cd\s+\.\.$/,
   /^cd\s+[\w-]+$/,
   /^bun install\b/,
   /^bunx?\s+prisma\s+generate\b/,
-  /^(bunx|npx)\s+shadcn@latest\s+(init|add)\b/,
+  /^bun add @google\/adk\b/,
 ];
 
 function isAllowedBashCommand(command: string): boolean {
@@ -203,7 +203,7 @@ export async function runAgentQuery(
             return {
               behavior: "deny",
               message:
-                "Command not permitted here. Only `cd <subdir>`/`cd ..`, `bun install`, `bunx prisma generate`, and `bunx/npx shadcn@latest init`/`add` are allowed — no other commands, and no chaining with ;, &&, |, backticks, or $().",
+                "Command not permitted here. Only `cd <subdir>`/`cd ..`, `bun install`, `bunx prisma generate`, and `bun add @google/adk` are allowed — no other commands, and no chaining with ;, &&, |, backticks, or $().",
             };
           }
         }

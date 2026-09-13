@@ -22,7 +22,7 @@ export async function serializeGeneratedApp(doc: GeneratedAppDocument) {
     blueprintId: String(doc.blueprintId),
     blueprintName: blueprint?.name ?? "",
     database: doc.database,
-    frontendFramework: doc.frontendFramework,
+    outputTargets: doc.outputTargets,
     initialPrompt: doc.initialPrompt,
     status: doc.status,
     lastError: doc.lastError,
@@ -69,7 +69,7 @@ export async function createGeneratedApp(input: CreateGeneratedAppInput, platfor
     blueprintId: input.blueprintId,
     createdBy: platformUserId,
     database: input.database,
-    frontendFramework: input.frontendFramework || "React + Vite + TanStack Query + shadcn/ui",
+    outputTargets: input.outputTargets,
     initialPrompt: input.prompt || "",
     status: "working",
   });

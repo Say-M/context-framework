@@ -4,10 +4,17 @@ import { objectIdSchema } from "./common.schema";
 export const databaseChoiceSchema = z.enum(["mongodb", "postgres"]);
 export type DatabaseChoice = z.infer<typeof databaseChoiceSchema>;
 
+// What the generation pipeline should produce: plain CRUD APIs, Google-ADK
+// agents, or both. There is no "frontend" target — every generated app is
+// backend-only; the customer brings their own frontend and integrates with
+// it via the generated API/agent docs.
+export const outputTargetSchema = z.enum(["api", "agent"]);
+export type OutputTarget = z.infer<typeof outputTargetSchema>;
+
 export const createGeneratedAppSchema = z.object({
   blueprintId: objectIdSchema,
   database: databaseChoiceSchema,
-  frontendFramework: z.string().trim().max(200).optional(),
+  outputTargets: z.array(outputTargetSchema).min(1),
   prompt: z.string().trim().max(4000).optional(),
 });
 export type CreateGeneratedAppInput = z.infer<typeof createGeneratedAppSchema>;
@@ -20,7 +27,7 @@ export const generatedAppSchema = z.object({
   blueprintId: objectIdSchema,
   blueprintName: z.string(),
   database: databaseChoiceSchema,
-  frontendFramework: z.string(),
+  outputTargets: z.array(outputTargetSchema),
   initialPrompt: z.string(),
   status: generatedAppStatusSchema,
   lastError: z.string().nullable(),

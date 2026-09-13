@@ -34,7 +34,8 @@ function MyAppsPage() {
           <Card key={app.id}>
             <CardTitle>{app.blueprintName}</CardTitle>
             <CardDescription>
-              {app.database === "mongodb" ? "MongoDB" : "PostgreSQL"} · {app.frontendFramework}
+              {app.database === "mongodb" ? "MongoDB" : "PostgreSQL"} ·{" "}
+              {app.outputTargets.map((t) => (t === "api" ? "API" : "Agent")).join(" + ")}
             </CardDescription>
             <div className="mt-2">
               <StatusBadge variant="neutral">{app.status}</StatusBadge>

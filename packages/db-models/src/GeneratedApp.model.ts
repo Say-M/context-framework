@@ -15,7 +15,18 @@ const generatedAppSchema = new Schema(
     blueprintId: { type: Schema.Types.ObjectId, ref: "AppBlueprint", required: true },
     createdBy: { type: Schema.Types.ObjectId, ref: "PlatformUser", required: true },
     database: { type: String, enum: ["mongodb", "postgres"], required: true },
-    frontendFramework: { type: String, default: "React + Vite + TanStack Query + shadcn/ui" },
+    // What the generation pipeline produces: plain CRUD APIs, Google-ADK
+    // agents, or both. No frontend target — every generated app is
+    // backend-only, for an externally-built frontend to call.
+    outputTargets: {
+      type: [String],
+      enum: ["api", "agent"],
+      required: true,
+      validate: {
+        validator: (value: string[]) => Array.isArray(value) && value.length > 0,
+        message: "outputTargets must include at least one of \"api\" or \"agent\"",
+      },
+    },
     // Extra free-text instructions supplied at creation time, appended to
     // the generation prompt alongside the blueprint's specs.
     initialPrompt: { type: String, default: "" },

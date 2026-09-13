@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { createRoute, useNavigate } from "@tanstack/react-router";
-import { Button, Card, CardDescription, CardTitle, FormField, Input, Select, StatusBadge, Textarea } from "@bismo/ui";
-import type { DatabaseChoice } from "@bismo/shared-schemas";
+import { Button, Card, CardDescription, CardTitle, Checkbox, FormField, Select, StatusBadge, Textarea } from "@bismo/ui";
+import type { DatabaseChoice, OutputTarget } from "@bismo/shared-schemas";
 import { appLayoutRoute } from "../AppLayout";
 import { useCatalogBlueprint } from "@/features/catalog/queries";
 import { useCreateGeneratedApp } from "@/features/generated-apps/queries";
@@ -12,6 +12,11 @@ const DATABASE_OPTIONS = [
   { value: "postgres", label: "PostgreSQL" },
 ];
 
+const OUTPUT_TARGET_OPTIONS: { value: OutputTarget; label: string; description: string }[] = [
+  { value: "api", label: "Backend API", description: "Plain CRUD APIs over the blueprint's data model." },
+  { value: "agent", label: "Agent (Google ADK)", description: "AI agents built from the blueprint's \"AI Agent\" specs, callable over HTTP." },
+];
+
 function BlueprintDetailPage() {
   const { id } = blueprintDetailRoute.useParams();
   const navigate = useNavigate();
@@ -19,12 +24,18 @@ function BlueprintDetailPage() {
   const createGeneratedApp = useCreateGeneratedApp();
 
   const [database, setDatabase] = useState<DatabaseChoice>("mongodb");
-  const [frontendFramework, setFrontendFramework] = useState("");
+  const [outputTargets, setOutputTargets] = useState<OutputTarget[]>(["api"]);
   const [prompt, setPrompt] = useState("");
   const [serverError, setServerError] = useState<string | null>(null);
 
   if (isLoading) return <p className="text-sm text-[var(--bismo-text-muted)]">Loading…</p>;
   if (!blueprint) return <p className="text-sm text-[var(--bismo-text-muted)]">Blueprint not found.</p>;
+
+  const toggleOutputTarget = (target: OutputTarget, checked: boolean) => {
+    setOutputTargets((current) =>
+      checked ? [...current, target] : current.filter((t) => t !== target),
+    );
+  };
 
   const onGenerate = async () => {
     setServerError(null);
@@ -32,7 +43,7 @@ function BlueprintDetailPage() {
       const app = await createGeneratedApp.mutateAsync({
         blueprintId: blueprint.id,
         database,
-        frontendFramework: frontendFramework.trim() || undefined,
+        outputTargets,
         prompt: prompt.trim() || undefined,
       });
       navigate({ to: "/my-apps/$id", params: { id: app.id } });
@@ -61,8 +72,11 @@ function BlueprintDetailPage() {
 
       <Card className="flex flex-col gap-4">
         <div>
-          <CardTitle>Generate an application</CardTitle>
-          <CardDescription>Pick a database — everything else uses sensible defaults.</CardDescription>
+          <CardTitle>Generate a backend</CardTitle>
+          <CardDescription>
+            No frontend is generated — bring your own (Lovable, your own developers, or an existing
+            platform) and integrate with what's generated via its API/agent docs.
+          </CardDescription>
         </div>
         <FormField label="Database" htmlFor="database">
           <Select
@@ -72,13 +86,22 @@ function BlueprintDetailPage() {
             options={DATABASE_OPTIONS}
           />
         </FormField>
-        <FormField label="Frontend framework (optional)" htmlFor="framework">
-          <Input
-            id="framework"
-            placeholder="React + Vite + TanStack Query + shadcn/ui"
-            value={frontendFramework}
-            onChange={(e) => setFrontendFramework(e.target.value)}
-          />
+        <FormField label="What should this generate?" htmlFor="output-targets">
+          <div id="output-targets" className="flex flex-col gap-2">
+            {OUTPUT_TARGET_OPTIONS.map((option) => (
+              <label key={option.value} className="flex items-start gap-2 text-sm text-[var(--bismo-text)]">
+                <Checkbox
+                  checked={outputTargets.includes(option.value)}
+                  onCheckedChange={(checked) => toggleOutputTarget(option.value, checked)}
+                  className="mt-0.5"
+                />
+                <span>
+                  <span className="font-medium">{option.label}</span>
+                  <span className="block text-xs text-[var(--bismo-text-muted)]">{option.description}</span>
+                </span>
+              </label>
+            ))}
+          </div>
         </FormField>
         <FormField
           label="Anything specific you want? (optional)"
@@ -93,7 +116,7 @@ function BlueprintDetailPage() {
           />
         </FormField>
         {serverError && <p className="text-sm text-[var(--bismo-status-rejected)]">{serverError}</p>}
-        <Button onClick={onGenerate} disabled={createGeneratedApp.isPending}>
+        <Button onClick={onGenerate} disabled={createGeneratedApp.isPending || outputTargets.length === 0}>
           {createGeneratedApp.isPending ? "Generating…" : "Generate Application"}
         </Button>
       </Card>

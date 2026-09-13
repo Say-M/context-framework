@@ -1,6 +1,6 @@
 import { mkdir } from "node:fs/promises";
 import { GeneratedAppModel, type AppBlueprintDocument, type SpecificationDocument } from "@bismo/db-models";
-import type { DatabaseChoice } from "@bismo/shared-schemas";
+import type { DatabaseChoice, OutputTarget } from "@bismo/shared-schemas";
 import { commitWorkingTree, repoDir } from "./gitRepo";
 import { buildBlueprintBundle } from "../modules/generated-apps/service";
 import { publish } from "./socket";
@@ -10,7 +10,7 @@ import { injectDashboard } from "./dashboardScaffold";
 function buildGenerationPrompt(
   blueprint: AppBlueprintDocument,
   specs: SpecificationDocument[],
-  choices: { database: DatabaseChoice; frontendFramework: string; userPrompt: string },
+  choices: { database: DatabaseChoice; outputTargets: OutputTarget[]; userPrompt: string },
 ): string {
   const specBlocks = specs
     .map((spec) => {
@@ -19,36 +19,67 @@ function buildGenerationPrompt(
     })
     .join("\n\n---\n\n");
 
-  return `You are scaffolding the initial version of a real application from a set of business specifications. Work only inside the current directory — it is empty.
+  const withAgents = choices.outputTargets.includes("agent");
+  const targetsLabel = choices.outputTargets.map((t) => (t === "api" ? "backend APIs" : "Google ADK agents")).join(" + ");
+
+  return `You are scaffolding the initial version of a real backend from a set of business specifications. Work only inside the current directory — it is empty.
 
 # Application
 Name: ${blueprint.name}
 Description: ${blueprint.description || "(none provided)"}
 
+# What this run produces
+Output targets: ${targetsLabel}. There is no frontend in scope, ever — the customer brings their own
+frontend (built with Lovable, their own developers, or an existing platform) and integrates with what
+you build here purely through the HTTP API (and, if agents are in scope, the agent interact endpoint)
+documented in API.md. Do not create a \`frontend/\` directory or any UI code.
+
+Put everything under a \`backend/\` subdirectory, not the repo root — package.json, tsconfig.json, the
+Prisma schema, src/, all of it. This is required, not stylistic: a separately-injected admin dashboard
+looks for your code at exactly \`backend/src/...\` and silently skips itself if it isn't there.
+
 # Required stack (fixed — do not substitute anything)
 - Backend: Bun + Hono
 - ORM: Prisma, targeting ${choices.database === "mongodb" ? "MongoDB" : "PostgreSQL"}
-- Frontend: ${choices.frontendFramework}
-- UI components: shadcn/ui (latest — "new-york" style, Tailwind CSS v4, Radix UI primitives, lucide-react icons). Every screen must be built from shadcn/ui components, not bare unstyled HTML.
-
+- Validation: Zod for request/response validation
+${withAgents ? "- Agents: Google ADK (`@google/adk`) for every \"AI Agent\" spec — see \"Building agents\" below.\n" : ""}
 # Your task
-Produce a buildable initial scaffold of this application based on the specifications below:
-- A Prisma schema modeling every "Entity" spec as a model.
-- Hono routes providing basic CRUD for each entity. Mount each entity's router at \`/api/<path>\`, where \`<path>\` is the model name kebab-cased and then suffixed with "s" unless it already ends in one (e.g. \`FiscalPeriod\` → \`/api/fiscal-periods\`, \`Address\` → \`/api/address\`) — mechanical, not grammatical, so it stays unambiguous. This exact convention is required, not just a suggestion: a separately-injected admin dashboard derives each entity's API path from its Prisma model name using this same rule, and depends on the two never disagreeing.
-- A minimal frontend with list/detail pages for each entity, wired to the backend via the frontend's data-fetching layer, built with shadcn/ui components (Table or Card for lists, Dialog or Sheet for create/edit forms, Button/Input/Label/Select/Badge for form controls, Sonner for toasts) — not raw \`<table>\`/\`<div>\`/\`<button>\` markup.
-- A README explaining what was generated and its current limitations.
-- Valid package.json/tsconfig files for both backend and frontend so the result is structurally buildable.
+Produce a buildable initial scaffold of this backend based on the specifications below:
+- A Prisma schema modeling every "Entity" spec (data_model section) as a model.
+- Hono routes providing basic CRUD for each entity. Mount each entity's router at \`/api/<path>\`, where \`<path>\` is the model name kebab-cased and then suffixed with "s" unless it already ends in one (e.g. \`FiscalPeriod\` → \`/api/fiscal-periods\`, \`Address\` → \`/api/address\`) — mechanical, not grammatical, so it stays unambiguous. This exact convention is required, not just a suggestion: the separately-injected admin dashboard derives each entity's API path from its Prisma model name using this same rule (see its already-built \`GET /__dashboard/api/schema\`, which parses your \`schema.prisma\` directly) and depends on the two never disagreeing. Response bodies must follow this exact shape so the dashboard can render them generically: list → \`{ "items": [...] }\`, get/create/update → \`{ "item": {...} }\`, delete → \`{ "ok": true }\`.
+- An \`AuditLog\` Prisma model, and every write (create/update/delete on any entity route${withAgents ? ", and every agent tool call that writes" : ""}) inserts a row into it. Expose it read-only at \`GET /api/logs\`, returning \`{ "items": [{ "id": string, "time": string, "severity": "Info"|"Success"|"Warning"|"Error", "source": string, "message": string, "requestId": string }] }\` — map your \`AuditLog\` model's own columns to exactly these field names in the handler, regardless of what you named them internally. The injected dashboard's Logs section depends on this exact response shape.
+${
+  withAgents
+    ? `- For every "AI Agent" spec, a real Google ADK agent (not a stub). Expose \`GET /api/agents\` returning \`{ "items": [{ "id": string, "name": string, "description": string }] }\`, and \`POST /api/agents/:agentId/interact\` accepting \`{ "message": string }\` and returning \`{ "message": string, "data"?: unknown }\`. See "Building agents" below.\n`
+    : ""
+}- "Screen", "Form", and "Report" specs describe UI that is out of scope for this run — instead of building it, document the intended request/response shape for each in \`API.md\` so an external frontend developer knows what to build against.
+- "Permission" specs → a route-level auth middleware stub. "State" specs → a status enum on the relevant Prisma model. "Notification" and "Integration" specs → a stub service class. "Workflow" and "Business Rule" specs describe behavior beyond basic CRUD — approximate them reasonably (e.g. a comment, a stub function, a simplified check) rather than fully implementing them. This is an initial scaffold; the user will keep refining it afterward.
+- \`API.md\` documenting every implemented route${withAgents ? " and every agent's interact endpoint" : ""}, each with an example request and response — this is what the customer's own frontend integrates against, so it must be accurate to what you actually built, not aspirational.
+- A README explaining what was generated, its current limitations, and how to run it.
+- Valid package.json/tsconfig for the backend so the result is structurally buildable.
+- \`.env.example\` with everything needed to run it${withAgents ? ", including \`LLM_PROVIDER\`, \`LLM_MODEL\`, and a placeholder for whichever provider's API key \`LLM_PROVIDER\` implies (e.g. \`GOOGLE_API_KEY\`, \`OPENAI_API_KEY\`, \`ANTHROPIC_API_KEY\`) — never a real key, just the placeholder names. The customer supplies their own real key after generation; you never see or need one." : "."}
+${
+  withAgents
+    ? `
+## Building agents
+Install the SDK yourself: \`bun add @google/adk\`. A minimal agent (confirmed against the package's public docs) looks like this:
 
-## Setting up shadcn/ui
-You have Bash, but only for a fixed set of setup commands (see Constraints) — enough to run the real shadcn/ui CLI instead of hand-authoring what it would generate:
-1. Hand-write the frontend's base Vite+React skeleton yourself first (package.json with react/react-dom/vite declared, vite.config.ts, tsconfig.json, index.html, src/main.tsx) — \`create-vite\` itself isn't on the allow-list, so this part is still Write/Edit.
-2. From inside \`frontend/\`, run \`bunx shadcn@latest init --yes --defaults --css-variables\` to wire up Tailwind v4 and the "new-york" theme for real.
-3. From inside \`frontend/\`, run \`bunx shadcn@latest add <component> --yes --overwrite\` for exactly the primitives you use (at minimum button, input, label, card, table, dialog, badge) — one \`add\` call can take multiple component names.
-4. Run \`bun install\` in both \`backend/\` and \`frontend/\` once their package.json files are complete, so dependencies are actually resolved, not just declared.
-Don't hand-write files these commands would have produced — let the CLI generate them for real. Only fall back to hand-authoring a component if a command genuinely fails after a reasonable retry.
+\`\`\`ts
+import { LlmAgent } from "@google/adk";
 
-"Workflow", "Business Rule", and "AI Agent" specs describe behavior beyond basic CRUD — approximate them reasonably (e.g. a comment, a stub function, a simplified check) rather than fully implementing them. This is an initial scaffold; the user will keep refining it afterward.
+export const someAgent = new LlmAgent({
+  name: "some_agent",
+  description: "...",
+  model: process.env.LLM_MODEL ?? "gemini-flash-latest",
+  instruction: "...",
+  tools: [/* Zod-typed function tools */],
+});
+\`\`\`
 
+Public documentation for \`@google/adk\` is thin beyond this — treat \`node_modules/@google/adk\`'s shipped \`.d.ts\` files as the source of truth for anything else you need (the exact Runner/session API to invoke an agent from a Hono route, how to define a tool function, multi-agent composition, etc.) rather than guessing, since this must actually compile. Every tool an agent uses must go through the same Prisma Client as the plain CRUD routes — never hand the agent a raw database connection — and every tool call that writes data must insert an \`AuditLog\` row, exactly like the plain CRUD routes do.
+`
+    : ""
+}
 This is a non-interactive, one-shot run — there is no one available to answer questions or clarify anything, now or later. If a specification is thin, vague, or incomplete (e.g. a placeholder like "Fields..." with no real detail), do not stop to ask about it or explain what's missing: fill the gap with a reasonable, clearly-labeled assumption (e.g. a comment noting it's a placeholder) and keep going. Ending your turn without having written any files is only acceptable if the task is genuinely impossible, never because the input was imperfect — a rough scaffold the user can correct beats no scaffold at all.
 ${
   choices.userPrompt
@@ -56,7 +87,7 @@ ${
     : ""
 }
 # Constraints
-- You have Read, Write, Edit, Glob, Grep, and Bash — but Bash only runs a fixed set of commands: \`cd <subdir>\`/\`cd ..\`, \`bun install\`, \`bunx prisma generate\`, and \`bunx/npx shadcn@latest init\`/\`add\`. Anything else (including chaining with \`;\`, \`&&\`, \`|\`, backticks, or \`$()\`) is denied — don't waste turns trying other commands.
+- You have Read, Write, Edit, Glob, Grep, and Bash — but Bash only runs a fixed set of commands: \`cd <subdir>\`/\`cd ..\`, \`bun install\`, \`bunx prisma generate\`${withAgents ? ", `bun add @google/adk`" : ""}. Anything else (including chaining with \`;\`, \`&&\`, \`|\`, backticks, or \`$()\`) is denied — don't waste turns trying other commands.
 - Do not initialize a git repository or attempt to commit — that happens outside your control after you finish.
 - Stay inside the current directory.
 
@@ -89,7 +120,7 @@ export async function runGeneration(generatedAppId: string) {
 
     const prompt = buildGenerationPrompt(blueprint, specs, {
       database: doc.database,
-      frontendFramework: doc.frontendFramework,
+      outputTargets: doc.outputTargets as OutputTarget[],
       userPrompt: doc.initialPrompt,
     });
 
